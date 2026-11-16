@@ -36,7 +36,7 @@ def call_gemini(prompt):
             "contents": [{"parts": [{"text": prompt}]}],
             "generationConfig": {"temperature": 0.2, "maxOutputTokens": 32768}
         }
-        res = requests.post(url, json=payload, timeout=180)
+        res = requests.post(url, json=payload, timeout=240)
         if res.status_code == 200:
             data = res.json()
             parts = data.get("candidates", [{}])[0].get("content", {}).get("parts", [])
@@ -88,6 +88,38 @@ def extract_and_run_diagram_code(raw_text, img_path):
         return clean_text, False
 
 
+def generate_interactive_html(paper_id, date, scientist, title, lecture_body):
+    html_prompt = f"""
+You are an expert computational physicist and scientific visualization engineer.
+Based on the historical physics lecture provided below for:
+- Paper: {title} ({date}) by {scientist}
+
+Build a **single-file, self-contained, interactive HTML5 Canvas demonstration** that visually animates and demonstrates the exact mathematical/geometric derivation step-by-step using ONLY period-accurate tools from {date}.
+
+**STRICT DESIGN & CONTENT RULES:**
+1. **NO PROSE OR EXPLANATORY PARAGRAPHS:** Do NOT write descriptive text, paragraphs, or wordy explanations. Communicate 100% visually through:
+   - An interactive dark-mode HTML5 `<canvas>` (`#090d16` background) drawing the exact geometric/physical construction with labeled points, vectors, angles, and highlighted active elements.
+   - Interactive sliders to control key system parameters (e.g., angles, eccentricity, radii, time) plus Play/Pause and Step Next/Prev buttons.
+   - Live KaTeX parameter readouts above the canvas.
+   - A right-hand panel containing ONLY pure symbolic step-by-step derivation cards rendered with KaTeX (`https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css` & `.js`) and Tailwind CSS (`https://cdn.tailwindcss.com`). Clicking a derivation step or advancing steps must highlight the corresponding geometric elements/angles on the canvas.
+2. **Historical Fidelity:** Use ONLY the exact symbols, geometric constructions, and mathematical methods from {date} present in the lecture below.
+3. **Output Format:** Return ONLY valid, complete HTML starting with `<!DOCTYPE html>` and ending with `</html>`. Do not wrap in markdown fences or add any text outside the HTML.
+
+**LECTURE CONTENT TO VISUALIZE:**
+{lecture_body[:18000]}
+"""
+    try:
+        raw_html = call_gemini(html_prompt)
+        match = re.search(r'(<!DOCTYPE html[\s\S]*?</html>)', raw_html, re.IGNORECASE)
+        if match:
+            return match.group(1)
+        if "<html" in raw_html.lower():
+            return raw_html
+    except Exception as e:
+        print(f"⚠️ HTML generation failed: {e}")
+    return None
+
+
 def sanitize_markdown_for_xelatex(text):
     text = re.sub(r'\\\[(.*?)\\\]', r'\n$$\n\1\n$$\n', text, flags=re.DOTALL)
     text = re.sub(r'\\\((.*?)\\\)', r'$\1$', text, flags=re.DOTALL)
@@ -109,12 +141,14 @@ def sanitize_markdown_for_xelatex(text):
     ]
     cmd_names = "|".join(cmd_list)
 
-    # يدعم حتى مستويين من الأقواس المتداخلة مثل \frac{a}{b} أو \sqrt{\frac{x}{y}}
     brace_arg = r'\{(?:[^{}]|\{[^{}]*\})*\}'
     math_cmds = re.compile(
-        r'(\\(?:' + cmd_names + r')\b' r'(?:' + brace_arg + r'\vert{}\^' + brace_arg + r'\vert{}_' + brace_arg + r'\vert{}\^[a-zA-Z0-9]\vert{}_[a-zA-Z0-9])*)' ) 
+        r'(\\(?:' + cmd_names + r')\b'
+        r'(?:' + brace_arg + r'|\^' + brace_arg + r'|_' + brace_arg + r'|\^[a-zA-Z0-9]|_[a-zA-Z0-9])*)'
+    )
+
     for i in range(0, len(parts), 2):
-        parts[i] = math_cmds.sub(r'$\1$', parts[i]) 
+        parts[i] = math_cmds.sub(r'$\1$', parts[i])
         parts[i] = re.sub(r'(?<!\\)_', r'\\_', parts[i])
 
     return "".join(parts)
@@ -149,15 +183,15 @@ def main():
 **قواعد صارمة جداً للأسلوب والمحتوى (إلزامية ولا تهاون فيها):**
 1. **التقيد الحرفي بأدوات عصر المؤلف (Anti-Anachronism Rule):**
    - يُمنع منعاً باتاً استخدام أي أداة رياضية أو فيزيائية لم تكن قد اختُرعت بعد في تاريخ نشر هذه الورقة ({date})!
-   - على سبيل المثال: لا تستخدم متسلسلة تايلور أو المتجهات الحديثة أو التفاضل والتكامل في شرح أعمال القرن السادس عشر أو أوائل السابع عشر (استخدم الهندسة الإقليدية، تشابه المثلثات، النسب والتناسب، الدوائر، والأوتار كما فعل المؤلف حرفياً). التزم بالمنهج الرياضي الفعلي الذي استخدمه المؤلف داخل النص الأصلي.
+   - التزم بالمنهج الرياضي الفعلي الذي استخدمه المؤلف داخل النص الأصلي فقط.
 2. **منع الاقتباسات الأجنبية نهائياً:** لا تكتب أي اقتباس حرفي باللاتينية أو الفرنسية أو الألمانية. اكتب الشرح بالكامل باللغة العربية الفصحى الرصينة (مع الإبقاء فقط على المصطلحات العلمية الإنجليزية بين قوسين).
 3. **ترجمة عنوان الورقة للغتين:** في أول سطرين من إجابتك، اكتب:
    - **عنوان العمل بالإنجليزية:** \\textenglish{{(الترجمة الإنجليزية الدقيقة للعنوان)}}
    - **عنوان العمل بالعربية:** (الترجمة العربية الأكاديمية الدقيقة للعنوان)
 4. **شرح كل رمز رياضي وهندسي وتنسيق الجداول:**
    - أي رمز تستخدمه في أي معادلة أو برهان يجب أن توضح معناه الفيزيائي/الهندسي بدقة فور ظهوره.
-   - عند عمل جدول للرموز، اجعله من عمودين فقط: `| الرمز | الدلالة الهندسية والفيزيائية |`، واجعل النص داخل كل خلية قصيراً ومكثفاً (سطر واحد لكل رمز) حتى لا يتشوه عرض الجدول في الطباعة.
-5. **التخيّل البصري والهندسي الدقيق:** اشرح التكوين الهندسي بدقة متناهية (المراكز، الخطوط المساعدة، الزوايا، نقاط التماس، والمسارات) ليرى القارئ البنية الهندسية في ذهنه بوضوح تام.
+   - عند عمل جدول للرموز، اجعله من عمودين فقط: `| الرمز | الدلالة الهندسية والفيزيائية |`، واجعل النص داخل كل خلية قصيراً ومكثفاً (سطر واحد لكل رمز).
+5. **التخيّل البصري والهندسي الدقيق:** اشرح التكوين الهندسي بدقة متناهية (المراكز، الخطوط المساعدة، الزوايا، نقاط التماس، والمسارات).
 6. **توليد رسمة هندسية/فيزيائية عبر Python (Matplotlib):** في نهاية إجابتك تماماً، اكتب بلوك كود بايثون واحد محصور بين ` ```python ` و ` ``` ` يستخدم مكتبة `matplotlib` و `numpy` لرسم الشكل الهندسي أو المخطط الفيزيائي الجوهري لهذه الورقة بنفس البناء الهندسي للمؤلف (مع تسمية النقاط والمتجهات والزوايا باللغة الإنجليزية مثل $O, C, D, P, R, \\theta$، وإضافة عنوان واضح للشكل، وحفظه باستخدام `plt.savefig('diagram.png')`).
 
 **اشرح لي هذه الورقة وفق هذه المحاور الستة بالترتيب:**
@@ -171,6 +205,7 @@ def main():
 **قواعد التنسيق:**
 - ابدأ الشرح مباشرة بالمحور الأول دون أي مقدمات ترحيبية.
 - لا تكتب أي كلمة عربية إطلاقاً داخل علامات الرياضيات `$ ... $` أو `$$ ... $$` (اكتب الوحدات مثل "يوماً" أو "راديان" خارج علامات الدولار).
+- أي مصطلح إنجليزي أو رقم بين قوسين تكتبه داخل النص العربي (مثل سنوات الميلاد أو المصطلحات العلمية) ضعه دائماً داخل الأمر `\\textenglish{{(...)}}` (مثلاً: `\\textenglish{{(1473--1543)}}`) حتى لا ينعكس اتجاه الأقواس في الطباعة العربية.
 - استخدم صيغة Markdown + LaTeX القياسية لجميع المعادلات (`$ ... $` و `$$ ... $$`).
 """
 
@@ -179,6 +214,7 @@ def main():
     os.makedirs("lectures_md", exist_ok=True)
     os.makedirs("lectures_pdf", exist_ok=True)
     os.makedirs("lectures_img", exist_ok=True)
+    os.makedirs("lectures_html", exist_ok=True)
 
     clean_author = re.sub(r'[^a-zA-Z0-9]', '_', scientist.split('(')[0].strip())
     clean_date = re.sub(r'[^0-9\-]', '', str(date))
@@ -187,9 +223,19 @@ def main():
     md_path = f"lectures_md/{base_name}.md"
     pdf_path = f"lectures_pdf/{base_name}.pdf"
     img_path = f"lectures_img/{base_name}.png"
+    html_path = f"lectures_html/{base_name}.html"
 
     raw_lecture_body, has_diagram = extract_and_run_diagram_code(raw_response, img_path)
     clean_lecture_body = sanitize_markdown_for_xelatex(raw_lecture_body)
+
+    # توليد ملف الـ HTML التفاعلي بناءً على المحاضرة
+    interactive_html = generate_interactive_html(paper_id, date, scientist, title, raw_lecture_body)
+    has_html = False
+    if interactive_html:
+        with open(html_path, "w", encoding="utf-8") as f:
+            f.write(interactive_html)
+        has_html = True
+        print(f"✅ Generated Interactive HTML: {html_path}")
 
     safe_title = title.replace("&", "\\&").replace("%", "\\%").replace("_", "\\_")
     safe_scientist = scientist.replace("&", "\\&").replace("%", "\\%").replace("_", "\\_")
@@ -278,7 +324,7 @@ link: "{link}"
         f.write(obsidian_md)
 
     msg = EmailMessage()
-    msg["Subject"] = f"[{paper_id} | {date}] {scientist.split('(')[0].strip()}: محاضرة تأسيسية (XeLaTeX PDF)"
+    msg["Subject"] = f"[{paper_id} | {date}] {scientist.split('(')[0].strip()}: محاضرة تأسيسية + محاكاة تفاعلية"
     msg["From"] = f"Physics Archive <{GMAIL_USER}>"
     msg["To"] = SUBSCRIBERS[0]
     if len(SUBSCRIBERS) > 1:
@@ -291,13 +337,19 @@ link: "{link}"
         f"قطعة البازل: {puzzle}\n"
         f"الجسر السببي: {bridge}\n"
         f"الرابط الأرشيفي: {link}\n\n"
-        f"مرفق طيه نسخة PDF مطبوعة بمحرك XeLaTeX (مدعومة بالرسم الهندسي) ونسخة Markdown لـ Obsidian."
+        f"مرفق طيه:\n"
+        f"1. نسخة PDF مطبوعة بمحرك XeLaTeX ومدعومة بالرسم الهندسي.\n"
+        f"2. نسخة Markdown لـ Obsidian.\n"
+        f"3. ملف HTML تفاعلي (افتحه في المتصفح لمشاهدة الأنيميشن والتحكم في البارامترات)."
     )
 
     with open(pdf_path, "rb") as f:
         msg.add_attachment(f.read(), maintype="application", subtype="pdf", filename=f"{base_name}.pdf")
     with open(md_path, "rb") as f:
         msg.add_attachment(f.read(), maintype="text", subtype="markdown", filename=f"{base_name}.md")
+    if has_html and os.path.exists(html_path):
+        with open(html_path, "rb") as f:
+            msg.add_attachment(f.read(), maintype="text", subtype="html", filename=f"{base_name}.html")
 
     with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
         smtp.login(GMAIL_USER, GMAIL_APP_PASSWORD)
