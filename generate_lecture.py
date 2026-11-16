@@ -76,7 +76,8 @@ def extract_and_run_diagram_code(raw_text, img_path):
 def sanitize_markdown_for_xelatex(text):
     text = re.sub(r'\\\[(.*?)\\\]', r'\n$$\n\1\n$$\n', text, flags=re.DOTALL)
     text = re.sub(r'\\\((.*?)\\\)', r'$\1$', text, flags=re.DOTALL)
-    text = re.sub(r'([^\n])\n\$\$', r'\1\n\n$$', text) text = re.sub(r'\$\$\n([^\n])', r'$$\n\n\1', text)
+    text = re.sub(r'([^\n])\n\$\$', r'\1\n\n$$', text) 
+    text = re.sub(r'\$\$\n([^\n])', r'$$\n\n\1', text)
 
     parts = re.split(r'(\$\$[\s\S]*?\$\$|\$[^\$\n]+?\$)', text)
     math_cmds = r'(\\(?:sin\vert{}cos\vert{}tan\vert{}cot\vert{}sec\vert{}csc\vert{}arcsin\vert{}arccos\vert{}arctan\vert{}ln\vert{}log\vert{}exp\vert{}lim\vert{}sum\vert{}int\vert{}prod\vert{}sqrt\vert{}frac\vert{}partial\vert{}nabla\vert{}infty\vert{}alpha\vert{}beta\vert{}gamma\vert{}Gamma\vert{}delta\vert{}Delta\vert{}epsilon\vert{}varepsilon\vert{}zeta\vert{}eta\vert{}theta\vert{}Theta\vert{}iota\vert{}kappa\vert{}lambda\vert{}Lambda\vert{}mu\vert{}nu\vert{}xi\vert{}Xi\vert{}pi\vert{}Pi\vert{}rho\vert{}sigma\vert{}Sigma\vert{}tau\vert{}upsilon\vert{}phi\vert{}Phi\vert{}varphi\vert{}chi\vert{}psi\vert{}Psi\vert{}omega\vert{}Omega\vert{}cdot\vert{}times\vert{}pm\vert{}mp\vert{}leq\vert{}geq\vert{}neq\vert{}approx\vert{}equiv\vert{}propto\vert{}rightarrow\vert{}Rightarrow\vert{}leftarrow\vert{}Leftarrow\vert{}vec\vert{}hat\vert{}bar\vert{}dot\vert{}ddot)\b(?:\{[^}]*\}\vert{}\^\{[^}]*\}\vert{}_\{[^}]*\}\vert{}\^[a-zA-Z0-9]\vert{}_[a-zA-Z0-9])*)'  for i in range(0, len(parts), 2): parts[i] = re.sub(math_cmds, r'$\1$', parts[i]) parts[i] = re.sub(r'(?<!\\)_', r'\\_', parts[i])
