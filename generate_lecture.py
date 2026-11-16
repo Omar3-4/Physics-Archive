@@ -13,6 +13,7 @@ GMAIL_APP_PASSWORD = os.environ["GMAIL_APP_PASSWORD"]
 SUBSCRIBERS = [e.strip() for e in os.environ["SUBSCRIBERS_LIST"].split(",") if e.strip()]
 CSV_FILE = "History of Physics - Papers.csv"
 
+
 def get_next_paper(df):
     if "Status" not in df.columns:
         df["Status"] = ""
@@ -24,6 +25,7 @@ def get_next_paper(df):
         if status != "SENT":
             return idx, row
     return None, None
+
 
 def call_gemini(prompt):
     models = ["gemini-4-hydrogen", "gemini-3.8-flash", "gemini-3-flash-preview", "gemini-3.5-flash-lite"]
@@ -45,18 +47,21 @@ def call_gemini(prompt):
             print(f"⚠️ {model} failed with HTTP {res.status_code}")
     raise RuntimeError("All Gemini models failed.")
 
+
 def extract_and_run_diagram_code(raw_text, img_path):
-    """يستخرج كود Matplotlib من رد Gemini وينفذه لإنتاج رسمة هندسية عالية الدقة"""
     match = re.search(r'```python\s*([\s\S]*?)```', raw_text)
     if not match:
         return raw_text, False
     
     code = match.group(1)
-    # إزالة بلوك الكود من نص المحاضرة حتى لا يظهر ككود برمجي داخل الـ PDF
     clean_text = raw_text.replace(match.group(0), "").strip()
     
-    # إجبار الكود على الحفظ في المسار المحدد دون فتح نافذة رسومية
-    header_code = "import matplotlib\nmatplotlib.use('Agg')\nimport matplotlib.pyplot as plt\nimport numpy as np\n"
+    header_code = (
+        "import matplotlib\n"
+        "matplotlib.use('Agg')\n"
+        "import matplotlib.pyplot as plt\n"
+        "import numpy as np\n"
+    )
     code = re.sub(r'plt\.show\(\)', '', code)
     code = re.sub(r'plt\.savefig\([^\)]+\)', f"plt.savefig('{img_path}', dpi=300, bbox_inches='tight', facecolor='white')", code)
     if "plt.savefig" not in code:
@@ -73,16 +78,18 @@ def extract_and_run_diagram_code(raw_text, img_path):
         print(f"⚠️ Diagram generation skipped due to plot error: {res.stderr[-300:]}")
         return clean_text, False
 
+
 def sanitize_markdown_for_xelatex(text):
     text = re.sub(r'\\\[(.*?)\\\]', r'\n$$\n\1\n$$\n', text, flags=re.DOTALL)
     text = re.sub(r'\\\((.*?)\\\)', r'$\1$', text, flags=re.DOTALL)
-    text = re.sub(r'([^\n])\n\$\$', r'\1\n\n$$', text) 
-    text = re.sub(r'\$\$\n([^\n])', r'$$\n\n\1', text)
+    text = re.sub(r'([^\n])\n\$\$', r'\1\n\n$$', text) text = re.sub(r'\$\$\n([^\n])', r'$$\n\n\1', text)
 
     parts = re.split(r'(\$\$[\s\S]*?\$\$|\$[^\$\n]+?\$)', text)
-    math_cmds = r'(\\(?:sin\vert{}cos\vert{}tan\vert{}cot\vert{}sec\vert{}csc\vert{}arcsin\vert{}arccos\vert{}arctan\vert{}ln\vert{}log\vert{}exp\vert{}lim\vert{}sum\vert{}int\vert{}prod\vert{}sqrt\vert{}frac\vert{}partial\vert{}nabla\vert{}infty\vert{}alpha\vert{}beta\vert{}gamma\vert{}Gamma\vert{}delta\vert{}Delta\vert{}epsilon\vert{}varepsilon\vert{}zeta\vert{}eta\vert{}theta\vert{}Theta\vert{}iota\vert{}kappa\vert{}lambda\vert{}Lambda\vert{}mu\vert{}nu\vert{}xi\vert{}Xi\vert{}pi\vert{}Pi\vert{}rho\vert{}sigma\vert{}Sigma\vert{}tau\vert{}upsilon\vert{}phi\vert{}Phi\vert{}varphi\vert{}chi\vert{}psi\vert{}Psi\vert{}omega\vert{}Omega\vert{}cdot\vert{}times\vert{}pm\vert{}mp\vert{}leq\vert{}geq\vert{}neq\vert{}approx\vert{}equiv\vert{}propto\vert{}rightarrow\vert{}Rightarrow\vert{}leftarrow\vert{}Leftarrow\vert{}vec\vert{}hat\vert{}bar\vert{}dot\vert{}ddot)\b(?:\{[^}]*\}\vert{}\^\{[^}]*\}\vert{}_\{[^}]*\}\vert{}\^[a-zA-Z0-9]\vert{}_[a-zA-Z0-9])*)'  for i in range(0, len(parts), 2): parts[i] = re.sub(math_cmds, r'$\1$', parts[i]) parts[i] = re.sub(r'(?<!\\)_', r'\\_', parts[i])
+    math_cmds = (
+        r'(\\(?:sin\vert{}cos\vert{}tan\vert{}cot\vert{}sec\vert{}csc\vert{}arcsin\vert{}arccos\vert{}arctan\vert{}ln\vert{}log\vert{}exp\vert{}lim\vert{}sum\vert{}int\vert{}prod\vert{}sqrt\vert{}frac\vert{}partial\vert{}nabla\vert{}infty\vert{}' r'alpha\vert{}beta\vert{}gamma\vert{}Gamma\vert{}delta\vert{}Delta\vert{}epsilon\vert{}varepsilon\vert{}zeta\vert{}eta\vert{}theta\vert{}Theta\vert{}iota\vert{}kappa\vert{}lambda\vert{}Lambda\vert{}mu\vert{}nu\vert{}xi\vert{}Xi\vert{}' r'pi\vert{}Pi\vert{}rho\vert{}sigma\vert{}Sigma\vert{}tau\vert{}upsilon\vert{}phi\vert{}Phi\vert{}varphi\vert{}chi\vert{}psi\vert{}Psi\vert{}omega\vert{}Omega\vert{}cdot\vert{}times\vert{}pm\vert{}mp\vert{}leq\vert{}geq\vert{}neq\vert{}approx\vert{}equiv\vert{}' r'propto\vert{}rightarrow\vert{}Rightarrow\vert{}leftarrow\vert{}Leftarrow\vert{}vec\vert{}hat\vert{}bar\vert{}dot\vert{}ddot)\b' r'(?:\{[^}]*\}\vert{}\^\{[^}]*\}\vert{}_\{[^}]*\}\vert{}\^[a-zA-Z0-9]\vert{}_[a-zA-Z0-9])*)' )  for i in range(0, len(parts), 2): parts[i] = re.sub(math_cmds, r'$\1$', parts[i]) parts[i] = re.sub(r'(?<!\\)_', r'\\_', parts[i])
 
     return "".join(parts)
+
 
 def main():
     df = pd.read_csv(CSV_FILE, dtype=str).fillna("")
@@ -101,8 +108,8 @@ def main():
     link = paper["Primary Archival Link / Reference"]
 
     prompt = f"""
-أنت أستاذ فيزياء نظرية وتاريخ علوم متخصص في التحليل الرياضي الصارم للنصوص التأسيسية.
-مهمتك اليوم هي شرح هذه الورقة/العمل العلمي المحدد لطالب فيزياء متخصص يريد فهماً هندسياً ورياضياً عميقاً بدون أي غموض:
+أنت مؤرخ علوم وأستاذ فيزياء نظرية متخصص في إعادة بناء البراهين التاريخية بنفس أدوات وعقلية عصرها.
+مهمتك اليوم هي شرح هذه الورقة/العمل العلمي المحدد لطالب فيزياء متخصص يريد أن يعيش في زمن المؤلف ويفهم كيف فكر وبرهن بأدوات عصره المتاحة فقط:
 - الرمز الأرشيفي: {paper_id}
 - التاريخ: {date}
 - العالم: {scientist}
@@ -110,21 +117,26 @@ def main():
 - جهة النشر/الأرشيف: {venue}
 - السياق في سلسلة البازل: {puzzle} | {bridge}
 
-**قواعد صارمة جداً للأسلوب والمحتوى (إلزامية):**
-1. **منع الاقتباسات الأجنبية نهائياً:** لا تكتب أي اقتباس حرفي باللاتينية أو الفرنسية أو الألمانية. اكتب الشرح بالكامل باللغة العربية الفصحى الرصينة (مع الإبقاء فقط على المصطلحات العلمية الإنجليزية بين قوسين).
-2. **ترجمة عنوان الورقة للغتين:** في أول سطرين من إجابتك، اكتب:
+**قواعد صارمة جداً للأسلوب والمحتوى (إلزامية ولا تهاون فيها):**
+1. **التقيد الحرفي بأدوات عصر المؤلف (Anti-Anachronism Rule):**
+   - يُمنع منعاً باتاً استخدام أي أداة رياضية أو فيزيائية لم تكن قد اختُرعت بعد في تاريخ نشر هذه الورقة ({date})!
+   - على سبيل المثال: لا تستخدم متسلسلة تايلور أو المتجهات الحديثة أو التفاضل والتكامل في شرح أعمال القرن السادس عشر أو أوائل السابع عشر (استخدم الهندسة الإقليدية، تشابه المثلثات، النسب والتناسب، الدوائر، والأوتار كما فعل المؤلف حرفياً). التزم بالمنهج الرياضي الفعلي الذي استخدمه المؤلف داخل النص الأصلي.
+2. **منع الاقتباسات الأجنبية نهائياً:** لا تكتب أي اقتباس حرفي باللاتينية أو الفرنسية أو الألمانية. اكتب الشرح بالكامل باللغة العربية الفصحى الرصينة (مع الإبقاء فقط على المصطلحات العلمية الإنجليزية بين قوسين).
+3. **ترجمة عنوان الورقة للغتين:** في أول سطرين من إجابتك، اكتب:
    - **عنوان العمل بالإنجليزية:** \\textenglish{{(الترجمة الإنجليزية الدقيقة للعنوان)}}
    - **عنوان العمل بالعربية:** (الترجمة العربية الأكاديمية الدقيقة للعنوان)
-3. **شرح كل رمز رياضي وهندسي (Symbol Legend):** أي رمز تستخدمه في أي معادلة أو برهان يجب أن توضح معناه الفيزيائي/الهندسي بدقة فور ظهوره في قائمة واضحة.
-4. **التخيّل البصري والهندسي الدقيق:** اشرح التكوين الهندسي بدقة متناهية (المراكز، المحاور، الزوايا، المسارات) ليرى القارئ البنية الرياضية بوضوح تام.
-5. **توليد رسمة هندسية/فيزيائية عبر Python (Matplotlib):** في نهاية إجابتك تماماً، اكتب بلوك كود بايثون واحد محصور بين ` ```python ` و ` ``` ` يستخدم مكتبة `matplotlib` و `numpy` لرسم الشكل الهندسي أو المخطط الفيزيائي الجوهري لهذه الورقة بدقة عالية (مع تسمية النقاط والمتجهات والزوايا باللغة الإنجليزية مثل $O, C, D, P, R, \\theta$، وإضافة عنوان واضح للشكل، وحفظه باستخدام `plt.savefig('diagram.png')`).
+4. **شرح كل رمز رياضي وهندسي وتنسيق الجداول:**
+   - أي رمز تستخدمه في أي معادلة أو برهان يجب أن توضح معناه الفيزيائي/الهندسي بدقة فور ظهوره.
+   - عند عمل جدول للرموز، اجعله من عمودين فقط: `| الرمز | الدلالة الهندسية والفيزيائية |`، واجعل النص داخل كل خلية قصيراً ومكثفاً (سطر واحد لكل رمز) حتى لا يتشوه عرض الجدول في الطباعة.
+5. **التخيّل البصري والهندسي الدقيق:** اشرح التكوين الهندسي بدقة متناهية (المراكز، الخطوط المساعدة، الزوايا، نقاط التماس، والمسارات) ليرى القارئ البنية الهندسية في ذهنه بوضوح تام.
+6. **توليد رسمة هندسية/فيزيائية عبر Python (Matplotlib):** في نهاية إجابتك تماماً، اكتب بلوك كود بايثون واحد محصور بين ` ```python ` و ` ``` ` يستخدم مكتبة `matplotlib` و `numpy` لرسم الشكل الهندسي أو المخطط الفيزيائي الجوهري لهذه الورقة بنفس البناء الهندسي للمؤلف (مع تسمية النقاط والمتجهات والزوايا باللغة الإنجليزية مثل $O, C, D, P, R, \\theta$، وإضافة عنوان واضح للشكل، وحفظه باستخدام `plt.savefig('diagram.png')`).
 
 **اشرح لي هذه الورقة وفق هذه المحاور الستة بالترتيب:**
 1. **بطاقة العنوان والهوية**
 2. **التأصيل التاريخي المنهجي للفكرة**
 3. **التعريفات الرسمية ودليل الرموز (Formal Definitions & Symbol Guide)**
 4. **تحليل الفرضيات والبديهيات (Axioms & Postulates)**
-5. **البرهنة الكاملة خطوة بخطوة مع الوصف التخيلي للشكل**
+5. **البرهنة الكاملة خطوة بخطوة بأدوات المؤلف الأصلية مع الوصف التخيلي للشكل**
 6. **التمثيل والتطبيق العملي**
 
 **قواعد التنسيق:**
@@ -266,6 +278,7 @@ link: "{link}"
     df.at[idx, "Status"] = "SENT"
     df.at[idx, "Sent_Date"] = datetime.now().strftime("%Y-%m-%d %H:%M")
     df.to_csv(CSV_FILE, index=False, encoding="utf-8-sig")
+
 
 if __name__ == "__main__":
     main()
