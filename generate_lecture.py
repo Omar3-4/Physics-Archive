@@ -91,7 +91,8 @@ def extract_and_run_diagram_code(raw_text, img_path):
 def sanitize_markdown_for_xelatex(text):
     text = re.sub(r'\\\[(.*?)\\\]', r'\n$$\n\1\n$$\n', text, flags=re.DOTALL)
     text = re.sub(r'\\\((.*?)\\\)', r'$\1$', text, flags=re.DOTALL)
-    text = re.sub(r'([^\n])\n\$\$', r'\1\n\n$$', text) text = re.sub(r'\$\$\n([^\n])', r'$$\n\n\1', text)
+    text = re.sub(r'([^\n])\n\$\$', r'\1\n\n$$', text)
+    text = re.sub(r'\$\$\n([^\n])', r'$$\n\n\1', text)
 
     parts = re.split(r'(\$\$[\s\S]*?\$\$|\$[^\$\n]+?\$)', text)
 
