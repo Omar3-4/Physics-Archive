@@ -114,7 +114,8 @@ def sanitize_markdown_for_xelatex(text):
     math_cmds = re.compile(
         r'(\\(?:' + cmd_names + r')\b' r'(?:' + brace_arg + r'\vert{}\^' + brace_arg + r'\vert{}_' + brace_arg + r'\vert{}\^[a-zA-Z0-9]\vert{}_[a-zA-Z0-9])*)' ) 
     for i in range(0, len(parts), 2):
-        parts[i] = math_cmds.sub(r'$\1$', parts[i]) parts[i] = re.sub(r'(?<!\\)_', r'\\_', parts[i])
+        parts[i] = math_cmds.sub(r'$\1$', parts[i]) 
+        parts[i] = re.sub(r'(?<!\\)_', r'\\_', parts[i])
 
     return "".join(parts)
 
