@@ -45,22 +45,41 @@ def call_gemini(prompt):
             print(f"⚠️ {model} failed with HTTP {res.status_code}")
     raise RuntimeError("All Gemini models failed.")
 
+def extract_and_run_diagram_code(raw_text, img_path):
+    """يستخرج كود Matplotlib من رد Gemini وينفذه لإنتاج رسمة هندسية عالية الدقة"""
+    match = re.search(r'```python\s*([\s\S]*?)```', raw_text)
+    if not match:
+        return raw_text, False
+    
+    code = match.group(1)
+    # إزالة بلوك الكود من نص المحاضرة حتى لا يظهر ككود برمجي داخل الـ PDF
+    clean_text = raw_text.replace(match.group(0), "").strip()
+    
+    # إجبار الكود على الحفظ في المسار المحدد دون فتح نافذة رسومية
+    header_code = "import matplotlib\nmatplotlib.use('Agg')\nimport matplotlib.pyplot as plt\nimport numpy as np\n"
+    code = re.sub(r'plt\.show\(\)', '', code)
+    code = re.sub(r'plt\.savefig\([^\)]+\)', f"plt.savefig('{img_path}', dpi=300, bbox_inches='tight', facecolor='white')", code)
+    if "plt.savefig" not in code:
+        code += f"\nplt.savefig('{img_path}', dpi=300, bbox_inches='tight', facecolor='white')\n"
+    
+    with open("temp_plot.py", "w", encoding="utf-8") as f:
+        f.write(header_code + code)
+    
+    res = subprocess.run(["python", "temp_plot.py"], capture_output=True, text=True)
+    if res.returncode == 0 and os.path.exists(img_path):
+        print(f"✅ Generated geometric diagram: {img_path}")
+        return clean_text, True
+    else:
+        print(f"⚠️ Diagram generation skipped due to plot error: {res.stderr[-300:]}")
+        return clean_text, False
+
 def sanitize_markdown_for_xelatex(text):
-    # 1. تحويل صيغ اللاتكس البديلة \[...\] و \(...\) إلى $$...$$ و $...$ القياسية لـ Pandoc
     text = re.sub(r'\\\[(.*?)\\\]', r'\n$$\n\1\n$$\n', text, flags=re.DOTALL)
     text = re.sub(r'\\\((.*?)\\\)', r'$\1$', text, flags=re.DOTALL)
+    text = re.sub(r'([^\n])\n\$\$', r'\1\n\n$$', text) text = re.sub(r'\$\$\n([^\n])', r'$$\n\n\1', text)
 
-    # 2. التأكد من وجود سطر فارغ قبل وبعد المعادلات المستقلة $$...$$
-    text = re.sub(r'([^\n])\n\$\$', r'\1\n\n$$', text)
-    text = re.sub(r'\$\$\n([^\n])', r'$$\n\n\1', text)
-
-    # 3. حماية الأوامر الرياضية الشائعة خارج علامات $...$
     parts = re.split(r'(\$\$[\s\S]*?\$\$|\$[^\$\n]+?\$)', text)
-    math_cmds = r'(\\(?:sin|cos|tan|cot|sec|csc|arcsin|arccos|arctan|ln|log|exp|lim|sum|int|prod|sqrt|frac|partial|nabla|infty|alpha|beta|gamma|Gamma|delta|Delta|epsilon|varepsilon|zeta|eta|theta|Theta|iota|kappa|lambda|Lambda|mu|nu|xi|Xi|pi|Pi|rho|sigma|Sigma|tau|upsilon|phi|Phi|varphi|chi|psi|Psi|omega|Omega|cdot|times|pm|mp|leq|geq|neq|approx|equiv|propto|rightarrow|Rightarrow|leftarrow|Leftarrow|vec|hat|bar|dot|ddot)\b(?:\{[^}]*\}|\^\{[^}]*\}|_\{[^}]*\}|\^[a-zA-Z0-9]|_[a-zA-Z0-9])*)'
-    
-    for i in range(0, len(parts), 2):
-        parts[i] = re.sub(math_cmds, r'$\1$', parts[i])
-        parts[i] = re.sub(r'(?<!\\)_', r'\\_', parts[i])
+    math_cmds = r'(\\(?:sin\vert{}cos\vert{}tan\vert{}cot\vert{}sec\vert{}csc\vert{}arcsin\vert{}arccos\vert{}arctan\vert{}ln\vert{}log\vert{}exp\vert{}lim\vert{}sum\vert{}int\vert{}prod\vert{}sqrt\vert{}frac\vert{}partial\vert{}nabla\vert{}infty\vert{}alpha\vert{}beta\vert{}gamma\vert{}Gamma\vert{}delta\vert{}Delta\vert{}epsilon\vert{}varepsilon\vert{}zeta\vert{}eta\vert{}theta\vert{}Theta\vert{}iota\vert{}kappa\vert{}lambda\vert{}Lambda\vert{}mu\vert{}nu\vert{}xi\vert{}Xi\vert{}pi\vert{}Pi\vert{}rho\vert{}sigma\vert{}Sigma\vert{}tau\vert{}upsilon\vert{}phi\vert{}Phi\vert{}varphi\vert{}chi\vert{}psi\vert{}Psi\vert{}omega\vert{}Omega\vert{}cdot\vert{}times\vert{}pm\vert{}mp\vert{}leq\vert{}geq\vert{}neq\vert{}approx\vert{}equiv\vert{}propto\vert{}rightarrow\vert{}Rightarrow\vert{}leftarrow\vert{}Leftarrow\vert{}vec\vert{}hat\vert{}bar\vert{}dot\vert{}ddot)\b(?:\{[^}]*\}\vert{}\^\{[^}]*\}\vert{}_\{[^}]*\}\vert{}\^[a-zA-Z0-9]\vert{}_[a-zA-Z0-9])*)'  for i in range(0, len(parts), 2): parts[i] = re.sub(math_cmds, r'$\1$', parts[i]) parts[i] = re.sub(r'(?<!\\)_', r'\\_', parts[i])
 
     return "".join(parts)
 
@@ -91,32 +110,33 @@ def main():
 - السياق في سلسلة البازل: {puzzle} | {bridge}
 
 **قواعد صارمة جداً للأسلوب والمحتوى (إلزامية):**
-1. **منع الاقتباسات الأجنبية نهائياً:** لا تكتب أي اقتباس حرفي باللاتينية أو الفرنسية أو الألمانية أو غيرها. اكتب الشرح بالكامل باللغة العربية الفصحى الرصينة (مع الإبقاء فقط على المصطلحات العلمية الإنجليزية بين قوسين).
+1. **منع الاقتباسات الأجنبية نهائياً:** لا تكتب أي اقتباس حرفي باللاتينية أو الفرنسية أو الألمانية. اكتب الشرح بالكامل باللغة العربية الفصحى الرصينة (مع الإبقاء فقط على المصطلحات العلمية الإنجليزية بين قوسين).
 2. **ترجمة عنوان الورقة للغتين:** في أول سطرين من إجابتك، اكتب:
-   - **عنوان العمل بالإنجليزية:** (الترجمة الإنجليزية الدقيقة للعنوان).
-   - **عنوان العمل بالعربية:** (الترجمة العربية الأكاديمية الدقيقة للعنوان).
-3. **شرح كل رمز رياضي وهندسي (Symbol Legend):** أي رمز تستخدمه في أي معادلة أو برهان (مثل $r, \\theta, \\omega, C, D, \\Gamma_1, \\dots$) يجب أن توضح معناه الفيزيائي/الهندسي بدقة فور ظهوره في قائمة واضحة، ولا تترك أي رمز مجهول الدلالة.
-4. **التخيّل البصري والهندسي الدقيق (Spatial & Geometric Visualization):** بما أن القارئ يقرأ نصاً بدون الرسومات المرفقة في المخطوطة الأصلية، يجب عليك في كل خطوة هندسية أو فيزيائية أن تشرح له **كيف يتخيل الشكل في ذهنه بدقة** (أين يقع المركز؟ ما هي الدائرة الثابتة وأيها المتحركة؟ كيف تتغير الزوايا والأطوال مع الزمن؟ ما المسار الناتج؟). تجنب الأمثلة السطحية أو التشبيهات العامية، وركز على الوصف الهندسي والفضائي الدقيق الذي يجعل القارئ يرى البنية الرياضية بوضوح تام.
+   - **عنوان العمل بالإنجليزية:** \\textenglish{{(الترجمة الإنجليزية الدقيقة للعنوان)}}
+   - **عنوان العمل بالعربية:** (الترجمة العربية الأكاديمية الدقيقة للعنوان)
+3. **شرح كل رمز رياضي وهندسي (Symbol Legend):** أي رمز تستخدمه في أي معادلة أو برهان يجب أن توضح معناه الفيزيائي/الهندسي بدقة فور ظهوره في قائمة واضحة.
+4. **التخيّل البصري والهندسي الدقيق:** اشرح التكوين الهندسي بدقة متناهية (المراكز، المحاور، الزوايا، المسارات) ليرى القارئ البنية الرياضية بوضوح تام.
+5. **توليد رسمة هندسية/فيزيائية عبر Python (Matplotlib):** في نهاية إجابتك تماماً، اكتب بلوك كود بايثون واحد محصور بين ` ```python ` و ` ``` ` يستخدم مكتبة `matplotlib` و `numpy` لرسم الشكل الهندسي أو المخطط الفيزيائي الجوهري لهذه الورقة بدقة عالية (مع تسمية النقاط والمتجهات والزوايا باللغة الإنجليزية مثل $O, C, D, P, R, \\theta$، وإضافة عنوان واضح للشكل، وحفظه باستخدام `plt.savefig('diagram.png')`).
 
 **اشرح لي هذه الورقة وفق هذه المحاور الستة بالترتيب:**
-1. **بطاقة العنوان والهوية:** (الترجمة الإنجليزية والعربية لعنوان الورقة + المرجع الدقيق للأبواب/القضايا Propositions داخل العمل الأصلي).
-2. **التأصيل التاريخي المنهجي للفكرة:** السياق العلمي الدقيق والمأزق المعرفي أو الرياضي الذي سبق هذه الورقة مباشرة، وكيف ارتبطت بالأعمال التي قبلها.
-3. **التعريفات الرسمية ودليل الرموز (Formal Definitions & Symbol Guide):** عرض دقيق للمصطلحات والكميات الفيزيائية كما عرّفها المؤلف، مع جدول أو قائمة شاملة تشرح كل رمز رياضي وهندسي سيُستخدم في الورقة.
-4. **تحليل الفرضيات والبديهيات (Axioms & Postulates):** تفكيك المسلمات الفيزيائية والهندسية/الرياضية التي بنى عليها المؤلف استدلاله داخل النص.
-5. **البرهنة الكاملة خطوة بخطوة مع الوصف التخيلي للشكل (Rigorous Step-by-Step Proof & Geometric Visualization):** تتبع البرهان الرياضي أو الهندسي الكامل للمفاهيم والنظريات الواردة في الورقة، مع دمج **شرح التخيّل البصري والهندسي** لكل نقطة وخط ومسار في كل خطوة من خطوات البرهان، والحفاظ على الصرامة الرياضية الكاملة.
-6. **التمثيل والتطبيق العملي (Physical Application & Mathematical Modeling):** تطبيق البرهان على مسألة فيزيائية محددة أو نموذج رياضي يوضح القوة التفسيرية للورقة.
+1. **بطاقة العنوان والهوية**
+2. **التأصيل التاريخي المنهجي للفكرة**
+3. **التعريفات الرسمية ودليل الرموز (Formal Definitions & Symbol Guide)**
+4. **تحليل الفرضيات والبديهيات (Axioms & Postulates)**
+5. **البرهنة الكاملة خطوة بخطوة مع الوصف التخيلي للشكل**
+6. **التمثيل والتطبيق العملي**
 
 **قواعد التنسيق:**
 - ابدأ الشرح مباشرة بالمحور الأول دون أي مقدمات ترحيبية.
-- استخدم صيغة Markdown + LaTeX القياسية لجميع المعادلات: ضع أي رمز رياضي أو دالة مثل $\\sin\\theta$ دائماً بين علامتي دولار مفردتين `$ ... $`، وضع المعادلات المستقلة بين علامتي دولار مزدوجتين `$$ ... $$` مع ترك سطر فارغ قبلهما وبعدهما. لا تستخدم `\\(` أو `\\[`.
-- لا تكتب أي كلمة عربية إطلاقاً داخل علامات الرياضيات `$ ... $` أو `$$ ... $$` (اكتب الوحدات مثل "يوماً" أو "راديان" خارج علامات الدولار)، وضع العنوان الإنجليزي بين قوسين معكوفين `\textenglish{...}` حتى لا ينعكس اتجاه كلماته.
+- لا تكتب أي كلمة عربية إطلاقاً داخل علامات الرياضيات `$ ... $` أو `$$ ... $$` (اكتب الوحدات مثل "يوماً" أو "راديان" خارج علامات الدولار).
+- استخدم صيغة Markdown + LaTeX القياسية لجميع المعادلات (`$ ... $` و `$$ ... $$`).
 """
 
-    raw_lecture_body = call_gemini(prompt)
-    clean_lecture_body = sanitize_markdown_for_xelatex(raw_lecture_body)
+    raw_response = call_gemini(prompt)
 
     os.makedirs("lectures_md", exist_ok=True)
     os.makedirs("lectures_pdf", exist_ok=True)
+    os.makedirs("lectures_img", exist_ok=True)
 
     clean_author = re.sub(r'[^a-zA-Z0-9]', '_', scientist.split('(')[0].strip())
     clean_date = re.sub(r'[^0-9\-]', '', str(date))
@@ -124,12 +144,26 @@ def main():
 
     md_path = f"lectures_md/{base_name}.md"
     pdf_path = f"lectures_pdf/{base_name}.pdf"
+    img_path = f"lectures_img/{base_name}.png"
+
+    raw_lecture_body, has_diagram = extract_and_run_diagram_code(raw_response, img_path)
+    clean_lecture_body = sanitize_markdown_for_xelatex(raw_lecture_body)
 
     safe_title = title.replace("&", "\\&").replace("%", "\\%").replace("_", "\\_")
     safe_scientist = scientist.replace("&", "\\&").replace("%", "\\%").replace("_", "\\_")
     safe_venue = venue.replace("&", "\\&").replace("%", "\\%").replace("_", "\\_")
     safe_puzzle = puzzle.replace("&", "\\&").replace("%", "\\%").replace("_", "\\_")
     safe_bridge = bridge.replace("&", "\\&").replace("%", "\\%").replace("_", "\\_")
+
+    diagram_latex_block = ""
+    if has_diagram:
+        diagram_latex_block = f"""
+\\begin{{figure}}[H]
+\\centering
+\\includegraphics[width=0.88\\textwidth]{{{img_path}}}
+\\caption{{\\textenglish{{Geometric & Physical Diagram — {paper_id}}}}}
+\\end{{figure}}
+"""
 
     full_markdown = f"""---
 id: "{paper_id}"
@@ -147,7 +181,7 @@ title: "{title}"
 * **الرابط الأرشيفي:** <{link}>
 
 ---
-
+{diagram_latex_block}
 {clean_lecture_body}
 """
     with open(md_path, "w", encoding="utf-8") as f:
@@ -176,6 +210,7 @@ title: "{title}"
 
     print(f"✅ Compiled Vector PDF: {pdf_path}")
 
+    diagram_md_block = f"\n![Geometric Diagram](../{img_path})\n" if has_diagram else ""
     obsidian_md = f"""---
 id: "{paper_id}"
 date: "{date}"
@@ -194,7 +229,7 @@ link: "{link}"
 * **الرابط الأرشيفي:** <{link}>
 
 ---
-
+{diagram_md_block}
 {raw_lecture_body}
 """
     with open(md_path, "w", encoding="utf-8") as f:
@@ -214,7 +249,7 @@ link: "{link}"
         f"قطعة البازل: {puzzle}\n"
         f"الجسر السببي: {bridge}\n"
         f"الرابط الأرشيفي: {link}\n\n"
-        f"مرفق طيه نسخة PDF مطبوعة بمحرك XeLaTeX ونسخة Markdown لـ Obsidian."
+        f"مرفق طيه نسخة PDF مطبوعة بمحرك XeLaTeX (مدعومة بالرسم الهندسي) ونسخة Markdown لـ Obsidian."
     )
 
     with open(pdf_path, "rb") as f:
