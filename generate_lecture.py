@@ -1,5 +1,6 @@
 import os
 import re
+import sys
 import subprocess
 import smtplib
 from datetime import datetime
@@ -19,7 +20,7 @@ def get_next_paper(df):
         df["Status"] = ""
     if "Sent_Date" not in df.columns:
         df["Sent_Date"] = ""
-    
+
     for idx, row in df.iterrows():
         status = str(row["Status"]).strip().upper()
         if status != "SENT":
@@ -52,10 +53,10 @@ def extract_and_run_diagram_code(raw_text, img_path):
     match = re.search(r'```python\s*([\s\S]*?)```', raw_text)
     if not match:
         return raw_text, False
-    
+
     code = match.group(1)
     clean_text = raw_text.replace(match.group(0), "").strip()
-    
+
     header_code = (
         "import matplotlib\n"
         "matplotlib.use('Agg')\n"
@@ -63,19 +64,27 @@ def extract_and_run_diagram_code(raw_text, img_path):
         "import numpy as np\n"
     )
     code = re.sub(r'plt\.show\(\)', '', code)
-    code = re.sub(r'plt\.savefig\([^\)]+\)', f"plt.savefig('{img_path}', dpi=300, bbox_inches='tight', facecolor='white')", code)
+    code = re.sub(
+        r'plt\.savefig\([^\)]+\)',
+        f"plt.savefig('{img_path}', dpi=300, bbox_inches='tight', facecolor='white')",
+        code
+    )
     if "plt.savefig" not in code:
         code += f"\nplt.savefig('{img_path}', dpi=300, bbox_inches='tight', facecolor='white')\n"
-    
+
     with open("temp_plot.py", "w", encoding="utf-8") as f:
         f.write(header_code + code)
-    
-    res = subprocess.run(["python", "temp_plot.py"], capture_output=True, text=True)
-    if res.returncode == 0 and os.path.exists(img_path):
-        print(f"✅ Generated geometric diagram: {img_path}")
-        return clean_text, True
-    else:
-        print(f"⚠️ Diagram generation skipped due to plot error: {res.stderr[-300:]}")
+
+    try:
+        res = subprocess.run([sys.executable, "temp_plot.py"], capture_output=True, text=True, timeout=60)
+        if res.returncode == 0 and os.path.exists(img_path):
+            print(f"✅ Generated geometric diagram: {img_path}")
+            return clean_text, True
+        else:
+            print(f"⚠️ Diagram skipped due to plot error: {res.stderr[-300:]}")
+            return clean_text, False
+    except subprocess.TimeoutExpired:
+        print("⚠️ Diagram skipped: execution timed out after 60s.")
         return clean_text, False
 
 
@@ -85,8 +94,24 @@ def sanitize_markdown_for_xelatex(text):
     text = re.sub(r'([^\n])\n\$\$', r'\1\n\n$$', text) text = re.sub(r'\$\$\n([^\n])', r'$$\n\n\1', text)
 
     parts = re.split(r'(\$\$[\s\S]*?\$\$|\$[^\$\n]+?\$)', text)
-    math_cmds = (
-        r'(\\(?:sin\vert{}cos\vert{}tan\vert{}cot\vert{}sec\vert{}csc\vert{}arcsin\vert{}arccos\vert{}arctan\vert{}ln\vert{}log\vert{}exp\vert{}lim\vert{}sum\vert{}int\vert{}prod\vert{}sqrt\vert{}frac\vert{}partial\vert{}nabla\vert{}infty\vert{}' r'alpha\vert{}beta\vert{}gamma\vert{}Gamma\vert{}delta\vert{}Delta\vert{}epsilon\vert{}varepsilon\vert{}zeta\vert{}eta\vert{}theta\vert{}Theta\vert{}iota\vert{}kappa\vert{}lambda\vert{}Lambda\vert{}mu\vert{}nu\vert{}xi\vert{}Xi\vert{}' r'pi\vert{}Pi\vert{}rho\vert{}sigma\vert{}Sigma\vert{}tau\vert{}upsilon\vert{}phi\vert{}Phi\vert{}varphi\vert{}chi\vert{}psi\vert{}Psi\vert{}omega\vert{}Omega\vert{}cdot\vert{}times\vert{}pm\vert{}mp\vert{}leq\vert{}geq\vert{}neq\vert{}approx\vert{}equiv\vert{}' r'propto\vert{}rightarrow\vert{}Rightarrow\vert{}leftarrow\vert{}Leftarrow\vert{}vec\vert{}hat\vert{}bar\vert{}dot\vert{}ddot)\b' r'(?:\{[^}]*\}\vert{}\^\{[^}]*\}\vert{}_\{[^}]*\}\vert{}\^[a-zA-Z0-9]\vert{}_[a-zA-Z0-9])*)' )  for i in range(0, len(parts), 2): parts[i] = re.sub(math_cmds, r'$\1$', parts[i]) parts[i] = re.sub(r'(?<!\\)_', r'\\_', parts[i])
+
+    cmd_list = [
+        "sin", "cos", "tan", "cot", "sec", "csc", "arcsin", "arccos", "arctan",
+        "ln", "log", "exp", "lim", "sum", "int", "prod", "sqrt", "frac", "partial",
+        "nabla", "infty", "alpha", "beta", "gamma", "Gamma", "delta", "Delta",
+        "epsilon", "varepsilon", "zeta", "eta", "theta", "Theta", "iota", "kappa",
+        "lambda", "Lambda", "mu", "nu", "xi", "Xi", "pi", "Pi", "rho", "sigma",
+        "Sigma", "tau", "upsilon", "phi", "Phi", "varphi", "chi", "psi", "Psi",
+        "omega", "Omega", "cdot", "times", "pm", "mp", "leq", "geq", "neq",
+        "approx", "equiv", "propto", "rightarrow", "Rightarrow", "leftarrow",
+        "Leftarrow", "vec", "hat", "bar", "dot", "ddot"
+    ]
+    cmd_names = "|".join(cmd_list)
+
+    # يدعم حتى مستويين من الأقواس المتداخلة مثل \frac{a}{b} أو \sqrt{\frac{x}{y}}
+    brace_arg = r'\{(?:[^{}]|\{[^{}]*\})*\}'
+    math_cmds = re.compile(
+        r'(\\(?:' + cmd_names + r')\b' r'(?:' + brace_arg + r'\vert{}\^' + brace_arg + r'\vert{}_' + brace_arg + r'\vert{}\^[a-zA-Z0-9]\vert{}_[a-zA-Z0-9])*)' )      for i in range(0, len(parts), 2): parts[i] = math_cmds.sub(r'$\1$', parts[i]) parts[i] = re.sub(r'(?<!\\)_', r'\\_', parts[i])
 
     return "".join(parts)
 
@@ -174,7 +199,7 @@ def main():
 \\begin{{figure}}[H]
 \\centering
 \\includegraphics[width=0.88\\textwidth]{{{img_path}}}
-\\caption{{\\textenglish{{Geometric & Physical Diagram — {paper_id}}}}}
+\\caption{{\\textenglish{{Geometric and Physical Diagram — {paper_id}}}}}
 \\end{{figure}}
 """
 
