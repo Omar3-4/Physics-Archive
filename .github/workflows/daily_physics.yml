@@ -7,7 +7,7 @@ on:
   workflow_dispatch: # يتيح لك التشغيل اليدوي بضغطة زر للتجربة
 
 permissions:
-  contents: write # صلاحية تحديث ملف CSV وحفظ ملفات .md و .pdf داخل المستودع
+  contents: write # صلاحية تحديث ملف CSV وحفظ ملفات .md و .pdf والصور داخل المستودع
 
 jobs:
   build-and-send:
@@ -22,7 +22,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install Python dependencies
-        run: pip install pandas requests
+        run: pip install pandas requests matplotlib
 
       - name: Install Pandoc, XeLaTeX, and Amiri Arabic Font
         run: |
@@ -41,6 +41,6 @@ jobs:
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
-          git add "History of Physics - Papers.csv" lectures_md/ lectures_pdf/
-          git commit -m "Archive daily physics lecture" || exit 0
+          git add "History of Physics - Papers.csv" lectures_md/ lectures_pdf/ lectures_img/
+          git commit -m "Archive daily physics lecture with diagram" || exit 0
           git push
