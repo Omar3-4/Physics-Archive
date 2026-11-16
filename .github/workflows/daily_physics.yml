@@ -4,8 +4,8 @@ on:
   schedule:
     # 6:00 صباحاً بتوقيت القاهرة (UTC+2) يوافق 04:00 UTC (يبدأ قبلها بدقيقتين للتجهيز)
     - cron: '58 3 * * *'
-  workflow_dispatch:
-  
+  workflow_dispatch: # يتيح لك التشغيل اليدوي بضغطة زر للتجربة
+
 permissions:
   contents: write # صلاحية تحديث ملف CSV وحفظ ملفات .md و .pdf والصور داخل المستودع
 
@@ -20,6 +20,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+
+      - name: Check Python Syntax First
+        run: python -m py_compile generate_lecture.py
 
       - name: Install Python dependencies
         run: pip install pandas requests matplotlib
