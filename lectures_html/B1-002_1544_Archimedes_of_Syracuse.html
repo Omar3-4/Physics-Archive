@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Archimedes 1544: Statics & Hydrostatics</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <style>
+        body { background-color: #090d16; color: #e2e8f0; font-family: 'Times New Roman', serif; overflow: hidden; }
+        canvas { background-color: #090d16; border: 1px solid #1e293b; cursor: crosshair; }
+        .derivation-card { transition: all 0.3s ease; border-left: 4px solid transparent; cursor: pointer; }
+        .derivation-card.active { border-left-color: #fbbf24; background-color: #1e293b; }
+        .katex { font-size: 1.1em; }
+        input[type=range] { accent-color: #fbbf24; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #0f172a; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; }
+    </style>
+</head>
+<body class="flex h-screen w-screen overflow-hidden">
+
+    <!-- Left Panel: Visualization -->
+    <div class="flex-1 flex flex-col p-4 relative">
+        <!-- Header Readouts -->
+        <div class="flex justify-between items-center mb-4 bg-[#0f172a] p-4 rounded-lg border border-slate-800">
+            <div id="readout-1" class="text-xl"></div>
+            <div class="flex gap-4">
+                <button id="toggleMode" class="px-4 py-2 bg-amber-900/30 border border-amber-600 text-amber-400 rounded hover:bg-amber-900/50 transition">
+                    $\rightleftharpoons$ Switch Work
+                </button>
+            </div>
+            <div id="readout-2" class="text-xl"></div>
+        </div>
+
+        <!-- Canvas Container -->
+        <div class="relative flex-1 bg-black rounded-xl overflow-hidden border border-slate-800">
+            <canvas id="archimedesCanvas"></canvas>
+            
+            <!-- Controls Overlay -->
+            <div class="absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-col gap-4 bg-[#090d16]/80 p-6 rounded-2xl border border-slate-700 backdrop-blur-md w-2/3">
+                <div class="flex items-center gap-8">
+                    <div class="flex-1">
+                        <label id="label-param1" class="block text-xs text-slate-400 mb-1 uppercase tracking-widest"></label>
+                        <input type="range" id="param1" class="w-full" min="1" max="100" value="50">
+                    </div>
+                    <div class="flex-1">
+                        <label id="label-param2" class="block text-xs text-slate-400 mb-1 uppercase tracking-widest"></label>
+                        <input type="range" id="param2" class="w-full" min="1" max="100" value="30">
+                    </div>
+                </div>
+                <div class="flex justify-center gap-4">
+                    <button id="btnPrev" class="px-6 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-white">$\leftarrow$ Prev</button>
+                    <button id="btnPlay" class="px-8 py-2 bg-amber-600 hover:bg-amber-500 rounded-lg text-black font-bold">Play</button>
+                    <button id="btnNext" class="px-6 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-white">Next $\rightarrow$</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Panel: Derivation Steps -->
+    <div class="w-[450px] bg-[#0f172a] border-l border-slate-800 flex flex-col">
+        <div class="p-6 border-b border-slate-800">
+            <h1 id="workTitle" class="text-amber-500 text-lg font-bold tracking-tighter uppercase"></h1>
+            <p id="workSubtitle" class="text-slate-500 text-xs mt-1"></p>
+        </div>
+        <div id="derivationList" class="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+            <!-- Steps injected here -->
+        </div>
+        <div class="p-4 bg-black/40 text-[10px] text-slate-600 text-center uppercase tracking-widest">
+            Editio Princeps 1544 • Basel • Johannes Hervagius
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('archimedesCanvas');
+        const ctx = canvas.getContext('2d');
+        const state = {
+            mode: 'LEVER', // LEVER or BUOYANCY
+            step: 0,
+            playing: false,
+            param1: 50, // Lever: Weight A | Buoyancy: Density S
+            param2: 30, // Lever: Weight B | Buoyancy: Radius R2
+            time: 0
+        };
+
+        const CONTENT = {
+            LEVER: {
+                title: "De Aequiponderantibus",
+                subtitle: "ON THE EQUILIBRIUM OF PLANES (1544)",
+                params: ["Magnitude A", "Magnitude B"],
+                steps: [
+                    { math: "A : B :: CD : CE", highlight: ['A', 'B', 'CD', 'CE'] },
+                    { math: "LE = CD, \\quad DK = CE", highlight: ['LE', 'DK'] },
+                    { math: "LC = LE + EC = CD + CE", highlight: ['LC'] },
+                    { math: "CK = CD + DK = CD + CE", highlight: ['CK'] },
+                    { math: "\\therefore LC = CK \\implies C \\text{ is midpoint of } LK", highlight: ['C', 'LK'] },
+                    { math: "A = \\sum_{i=1}^{2m} P_i, \\quad B = \\sum_{j=1}^{2n} P_j", highlight: ['P'] },
+                    { math: "\\text{Equilibrium at } C \\text{ by Symmetry}", highlight: ['C'] }
+                ]
+            },
+            BUOYANCY: {
+                title: "De Iis Quae In Humido Vehuntur",
+                subtitle: "ON FLOATING BODIES (1544)",
+                params: ["Solid Density", "Inner Radius R2"],
+                steps: [
+                    { math: "\\text{Surface } UVW \\text{ is spherical, center } O", highlight: ['O', 'UVW'] },
+                    { math: "\\text{Sector } OUV = \\text{Sector } OVW", highlight: ['OUV', 'OVW'] },
+                    { math: "P_{QR} = P_{RT} \\text{ (Hydrostatic Equilibrium)}", highlight: ['QR', 'RT'] },
+                    { math: "W_S + W_{F1} = W_{F_{eq}} + W_{F_{rem}}", highlight: ['S', 'F1'] },
+                    { math: "W_{F1} = W_{F_{rem}} \\text{ (Equal Volumes)}", highlight: ['F1', 'Frem'] },
+                    { math: "\\therefore W_S = W_{F_{eq}}", highlight: ['S', 'Feq'] }
+                ]
+            }
+        };
+
+        function init() {
+            resize();
+            renderDerivation();
+            updateReadouts();
+            requestAnimationFrame(animate);
+        }
+
+        function resize() {
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+        }
+
+        window.addEventListener('resize', resize);
+
+        // UI Listeners
+        document.getElementById('toggleMode').onclick = () => {
+            state.mode = state.mode === 'LEVER' ? 'BUOYANCY' : 'LEVER';
+            state.step = 0;
+            renderDerivation();
+            updateReadouts();
+        };
+
+        document.getElementById('param1').oninput = (e) => { state.param1 = e.target.value; updateReadouts(); };
+        document.getElementById('param2').oninput = (e) => { state.param2 = e.target.value; updateReadouts(); };
+        document.getElementById('btnNext').onclick = () => { state.step = Math.min(state.step + 1, CONTENT[state.mode].steps.length - 1); renderDerivation(); };
+        document.getElementById('btnPrev').onclick = () => { state.step = Math.max(state.step - 1, 0); renderDerivation(); };
+        document.getElementById('btnPlay').onclick = () => { state.playing = !state.playing; document.getElementById('btnPlay').innerText = state.playing ? 'Pause' : 'Play'; };
+
+        function updateReadouts() {
+            const config = CONTENT[state.mode];
+            document.getElementById('workTitle').innerText = config.title;
+            document.getElementById('workSubtitle').innerText = config.subtitle;
+            document.getElementById('label-param1').innerText = config.params[0];
+            document.getElementById('label-param2').innerText = config.params[1];
+
+            if (state.mode === 'LEVER') {
+                katex.render(`A = ${state.param1}`, document.getElementById('readout-1'));
+                katex.render(`B = ${state.param2}`, document.getElementById('readout-2'));
+            } else {
+                katex.render(`\\rho_s = ${state.param1}`, document.getElementById('readout-1'));
+                katex.render(`R_2 = ${state.param2}`, document.getElementById('readout-2'));
+            }
+        }
+
+        function renderDerivation() {
+            const list = document.getElementById('derivationList');
+            list.innerHTML = '';
+            CONTENT[state.mode].steps.forEach((step, i) => {
+                const card = document.createElement('div');
+                card.className = `derivation-card p-4 rounded bg-slate-900/50 border border-slate-800 ${state.step === i ? 'active' : ''}`;
+                card.innerHTML = `<div id="step-math-${i}"></div>`;
+                card.onclick = () => { state.step = i; renderDerivation(); };
+                list.appendChild(card);
+                katex.render(step.math, document.getElementById(`step-math-${i}`));
+            });
+        }
+
+        function drawLever() {
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2 + 50;
+            const scale = 5;
+            
+            const A = parseFloat(state.param1);
+            const B = parseFloat(state.param2);
+            
+            // Archimedean Proportion: A/B = CD/CE
+            // Let CD = A * scale, CE = B * scale
+            const CD = A * scale;
+            const CE = B * scale;
+            
+            const E = cx - CE;
+            const D = cx + CD;
+            const L = E - CD;
+            const K = D + CE;
+            const M = L + 2 * CD;
+
+            // Draw Beam
+            ctx.strokeStyle = '#334155';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(L, cy);
+            ctx.lineTo(K, cy);
+            ctx.stroke();
+
+            // Fulcrum C
+            ctx.fillStyle = '#fbbf24';
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.lineTo(cx - 15, cy + 30);
+            ctx.lineTo(cx + 15, cy + 30);
+            ctx.fill();
+            drawLabel("C", cx, cy + 45, '#fbbf24');
+
+            // Points
+            const points = [
+                {x: L, l: "L"}, {x: E, l: "E"}, {x: M, l: "M"}, {x: D, l: "D"}, {x: K, l: "K"}
+            ];
+            
+            points.forEach(p => {
+                ctx.fillStyle = '#64748b';
+                ctx.beginPath();
+                ctx.arc(p.x, cy, 4, 0, Math.PI*2);
+                ctx.fill();
+                drawLabel(p.l, p.x, cy - 15);
+            });
+
+            // Weights
+            drawWeight(E, cy, A, "A", '#ef4444');
+            drawWeight(D, cy, B, "B", '#3b82f6');
+
+            // Step Highlights
+            const currentHighlights = CONTENT.LEVER.steps[state.step].highlight;
+            if (currentHighlights.includes('CD')) drawDim(cx, D, cy + 20, "CD", '#fbbf24');
+            if (currentHighlights.includes('CE')) drawDim(E, cx, cy + 20, "CE", '#fbbf24');
+            if (currentHighlights.includes('P')) {
+                const unit = 10;
+                for(let i=L; i<M; i+=unit) drawUnitWeight(i + unit/2, cy, '#ef4444');
+                for(let i=M; i<K; i+=unit) drawUnitWeight(i + unit/2, cy, '#3b82f6');
+            }
+        }
+
+        function drawBuoyancy() {
+            const ox = canvas.width / 2;
+            const oy = canvas.height / 2 - 100;
+            const R1 = 250;
+            const R2 = 100 + parseFloat(state.param2);
+            const theta = 0.4;
+
+            // Center O
+            ctx.fillStyle = '#fbbf24';
+            ctx.beginPath();
+            ctx.arc(ox, oy, 5, 0, Math.PI*2);
+            ctx.fill();
+            drawLabel("O (Earth Center)", ox, oy - 20, '#fbbf24');
+
+            // Arcs
+            ctx.strokeStyle = '#1e293b';
+            ctx.beginPath(); ctx.arc(ox, oy, R1, 0.5, Math.PI - 0.5); ctx.stroke();
+            ctx.beginPath(); ctx.arc(ox, oy, R2, 0.5, Math.PI - 0.5); ctx.stroke();
+
+            // Radial Lines
+            const angles = [Math.PI/2 - theta, Math.PI/2, Math.PI/2 + theta];
+            const labels = [['U','Q'], ['V','R'], ['W','T']];
+            
+            angles.forEach((a, i) => {
+                ctx.beginPath();
+                ctx.moveTo(ox + Math.cos(a)*R2, oy + Math.sin(a)*R2);
+                ctx.lineTo(ox + Math.cos(a)*R1, oy + Math.sin(a)*R1);
+                ctx.stroke();
+                drawLabel(labels[i][0], ox + Math.cos(a)*R1 * 1.05, oy + Math.sin(a)*R1 * 1.05);
+                drawLabel(labels[i][1], ox + Math.cos(a)*R2 * 0.9, oy + Math.sin(a)*R2 * 0.9);
+            });
+
+            // Fluid
+            ctx.fillStyle = '#1e3a8a44';
+            ctx.beginPath();
+            ctx.arc(ox, oy, R1, Math.PI/2, Math.PI/2 + theta);
+            ctx.arc(ox, oy, R2, Math.PI/2 + theta, Math.PI/2, true);
+            ctx.fill();
+
+            // Solid S
+            const sDensity = state.param1 / 100;
+            const sHeight = 80;
+            const sWidth = 60;
+            const submerged = sHeight * sDensity;
+            
+            ctx.save();
+            ctx.translate(ox - 60, oy + R1 - submerged);
+            ctx.fillStyle = '#92400e';
+            ctx.fillRect(-sWidth/2, - (sHeight - submerged), sWidth, sHeight);
+            ctx.strokeStyle = '#fbbf24';
+            ctx.strokeRect(-sWidth/2, - (sHeight - submerged), sWidth, sHeight);
+            drawLabel("S", 0, -20, '#fbbf24');
+            ctx.restore();
+        }
+
+        function drawWeight(x, y, mass, label, color) {
+            const h = mass * 0.8;
+            ctx.fillStyle = color + '44';
+            ctx.strokeStyle = color;
+            ctx.fillRect(x - 15, y, 30, h);
+            ctx.strokeRect(x - 15, y, 30, h);
+            drawLabel(label, x, y + h + 15, color);
+        }
+
+        function drawUnitWeight(x, y, color) {
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.arc(x, y, 2, 0, Math.PI*2);
+            ctx.fill();
+        }
+
+        function drawDim(x1, x2, y, label, color) {
+            ctx.strokeStyle = color;
+            ctx.beginPath();
+            ctx.moveTo(x1, y); ctx.lineTo(x2, y);
+            ctx.moveTo(x1, y-5); ctx.lineTo(x1, y+5);
+            ctx.moveTo(x2, y-5); ctx.lineTo(x2, y+5);
+            ctx.stroke();
+            drawLabel(label, (x1+x2)/2, y + 15, color);
+        }
+
+        function drawLabel(txt, x, y, color = '#64748b') {
+            ctx.fillStyle = color;
+            ctx.font = 'italic 14px serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(txt, x, y);
+        }
+
+        function animate(t) {
+            state.time = t;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            if (state.mode === 'LEVER') drawLever();
+            else drawBuoyancy();
+
+            if (state.playing) {
+                // Simple oscillation for visual life
+            }
+
+            requestAnimationFrame(animate);
+        }
+
+        init();
+    </script>
+</body>
+</html>
