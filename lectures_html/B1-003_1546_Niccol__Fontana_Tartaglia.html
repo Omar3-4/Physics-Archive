@@ -1,0 +1,1010 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tartaglia (1546) — Quesiti et inventioni diverse (Books I &amp; II)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <style>
+    :root {
+      color-scheme: dark;
+    }
+    body {
+      background-color: #060a12;
+      color: #e2e8f0;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    canvas {
+      background-color: #090d16;
+      touch-action: none;
+    }
+    .step-card {
+      transition: all 0.2s ease;
+    }
+    .step-card.active {
+      border-color: #f59e0b;
+      background-color: rgba(245, 158, 11, 0.08);
+      box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.35), 0 8px 24px -8px rgba(245, 158, 11, 0.25);
+    }
+    .katex {
+      font-size: 0.96em;
+    }
+    .katex-display {
+      margin: 0.35rem 0;
+    }
+    input[type="range"] {
+      accent-color: #f59e0b;
+    }
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #090d16;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #1e293b;
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #334155;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col overflow-x-hidden">
+
+  <!-- Header -->
+  <header class="border-b border-slate-800/80 bg-[#080c15] px-4 py-2.5 flex flex-wrap items-center justify-between gap-2">
+    <div class="flex items-center gap-3">
+      <span class="px-2 py-0.5 text-xs font-mono font-semibold rounded bg-amber-500/15 text-amber-400 border border-amber-500/30">B1-003 · 1546</span>
+      <h1 class="text-sm sm:text-base font-semibold tracking-tight text-slate-100">
+        Niccolò Fontana Tartaglia · <span class="text-amber-400">Quesiti et inventioni diverse</span> (Lib. I–II)
+      </h1>
+    </div>
+    <div class="flex items-center gap-2 text-xs font-mono text-slate-400">
+      <span class="px-2 py-0.5 rounded bg-slate-900 border border-slate-800">Euclid I–III</span>
+      <span class="px-2 py-0.5 rounded bg-slate-900 border border-slate-800">12-Pt Quadrant</span>
+    </div>
+  </header>
+
+  <!-- Main Workspace -->
+  <main class="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-3 p-3 max-w-[1800px] w-full mx-auto">
+
+    <!-- Left Column: Live Readouts + Canvas + Controls -->
+    <section class="lg:col-span-7 xl:col-span-8 flex flex-col gap-2.5">
+
+      <!-- Live KaTeX Readouts -->
+      <div id="readout-bar" class="grid grid-cols-2 sm:grid-cols-5 gap-2 bg-[#0b101b] border border-slate-800/90 rounded-lg p-2">
+        <div class="bg-[#090d16] border border-slate-800/80 rounded px-2.5 py-1.5 flex items-center justify-center" id="ro-theta"></div>
+        <div class="bg-[#090d16] border border-slate-800/80 rounded px-2.5 py-1.5 flex items-center justify-center" id="ro-impetus"></div>
+        <div class="bg-[#090d16] border border-slate-800/80 rounded px-2.5 py-1.5 flex items-center justify-center" id="ro-components"></div>
+        <div class="bg-[#090d16] border border-slate-800/80 rounded px-2.5 py-1.5 flex items-center justify-center" id="ro-product"></div>
+        <div class="bg-[#090d16] border border-slate-800/80 rounded px-2.5 py-1.5 flex items-center justify-center col-span-2 sm:col-span-1" id="ro-range"></div>
+      </div>
+
+      <!-- Canvas Container -->
+      <div class="relative flex-1 min-h-[420px] sm:min-h-[500px] bg-[#090d16] border border-slate-800/90 rounded-lg overflow-hidden shadow-2xl">
+        <canvas id="simCanvas" class="w-full h-full block cursor-crosshair"></canvas>
+
+        <!-- Minimal Symbolic Legend Overlay -->
+        <div class="pointer-events-none absolute top-2.5 left-2.5 flex flex-wrap gap-1.5 text-[11px] font-mono">
+          <span class="px-2 py-0.5 rounded bg-slate-950/80 border border-amber-500/40 text-amber-300">1546: O→P→R</span>
+          <span class="px-2 py-0.5 rounded bg-slate-950/80 border border-rose-500/40 text-rose-400">1537: O→A→B→C′</span>
+          <span class="px-2 py-0.5 rounded bg-slate-950/80 border border-cyan-500/40 text-cyan-300">△OXM</span>
+          <span class="px-2 py-0.5 rounded bg-slate-950/80 border border-violet-500/40 text-violet-300">CD=L</span>
+        </div>
+      </div>
+
+      <!-- Interactive Controls -->
+      <div class="bg-[#0b101b] border border-slate-800/90 rounded-lg p-3 flex flex-col gap-3">
+        <!-- Sliders -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div class="flex flex-col gap-1">
+            <div class="flex items-center justify-between text-xs font-mono text-slate-300">
+              <span id="lbl-theta"></span>
+              <span id="val-theta" class="text-amber-400">45.0° (6.0 pt)</span>
+            </div>
+            <input id="slider-theta" type="range" min="0" max="90" step="0.5" value="45" class="w-full cursor-pointer" />
+          </div>
+
+          <div class="flex flex-col gap-1">
+            <div class="flex items-center justify-between text-xs font-mono text-slate-300">
+              <span id="lbl-L"></span>
+              <span id="val-L" class="text-cyan-400">100</span>
+            </div>
+            <input id="slider-L" type="range" min="50" max="100" step="1" value="100" class="w-full cursor-pointer" />
+          </div>
+
+          <div class="flex flex-col gap-1">
+            <div class="flex items-center justify-between text-xs font-mono text-slate-300">
+              <span id="lbl-t"></span>
+              <span id="val-t" class="text-emerald-400">0.55</span>
+            </div>
+            <input id="slider-t" type="range" min="0" max="1" step="0.005" value="0.55" class="w-full cursor-pointer" />
+          </div>
+        </div>
+
+        <!-- Playback & Quadrant Presets -->
+        <div class="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-800/80">
+          <div class="flex items-center gap-1.5">
+            <button id="btn-play" class="px-3 py-1.5 rounded text-xs font-mono font-semibold bg-amber-500 text-slate-950 hover:bg-amber-400 transition">
+              Play
+            </button>
+            <button id="btn-prev" class="px-2.5 py-1.5 rounded text-xs font-mono bg-slate-800 text-slate-200 hover:bg-slate-700 border border-slate-700 transition">
+              Prev Step
+            </button>
+            <button id="btn-next" class="px-2.5 py-1.5 rounded text-xs font-mono bg-slate-800 text-slate-200 hover:bg-slate-700 border border-slate-700 transition">
+              Next Step
+            </button>
+            <button id="btn-reset" class="px-2.5 py-1.5 rounded text-xs font-mono bg-slate-900 text-slate-400 hover:text-slate-200 border border-slate-800 transition">
+              Reset
+            </button>
+          </div>
+
+          <!-- 12-Point Quadrant Quick Presets -->
+          <div class="flex items-center gap-1 flex-wrap font-mono text-[11px]">
+            <span class="text-slate-500 mr-1">n:</span>
+            <button data-pt="0" class="pt-btn px-2 py-1 rounded bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300">0 (0°)</button>
+            <button data-pt="2" class="pt-btn px-2 py-1 rounded bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300">2 (15°)</button>
+            <button data-pt="4" class="pt-btn px-2 py-1 rounded bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300">4 (30°)</button>
+            <button data-pt="6" class="pt-btn px-2 py-1 rounded bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/50 text-amber-300 font-semibold">6 (45°)</button>
+            <button data-pt="8" class="pt-btn px-2 py-1 rounded bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300">8 (60°)</button>
+            <button data-pt="10" class="pt-btn px-2 py-1 rounded bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300">10 (75°)</button>
+            <button data-pt="12" class="pt-btn px-2 py-1 rounded bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300">12 (90°)</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right Column: Pure Symbolic Derivation Cards -->
+    <aside class="lg:col-span-5 xl:col-span-4 flex flex-col bg-[#0b101b] border border-slate-800/90 rounded-lg overflow-hidden max-h-[calc(100vh-5.5rem)]">
+      <div class="px-3 py-2 border-b border-slate-800/90 flex items-center justify-between bg-[#080c15]">
+        <span id="derivation-header" class="text-xs font-mono text-slate-300"></span>
+        <span id="step-indicator" class="text-xs font-mono text-amber-400">1 / 8</span>
+      </div>
+      <div id="steps-container" class="flex-1 overflow-y-auto p-2.5 flex flex-col gap-2"></div>
+    </aside>
+
+  </main>
+
+  <script>
+    const STEPS = [
+      {
+        id: 1,
+        tag: "I · 1546",
+        badge: "O, OH, OV, OM",
+        tex: [
+          "\\angle VOH = 90^\\circ, \\qquad OM = L",
+          "\\theta = \\angle MOH = n \\cdot 7.5^\\circ \\quad (0 \\le n \\le 12)",
+          "n = 6 \\implies \\theta = 45^\\circ"
+        ],
+        highlight: ["axes", "quadrant", "om"]
+      },
+      {
+        id: 2,
+        tag: "II · Reductio",
+        badge: "1537 ⊥",
+        tex: [
+          "\\text{Hyp. (1537): } \\overline{OA} \\subset OM \\implies \\Delta y_{\\text{grav}}(OA) = 0",
+          "\\text{Axiom I: } \\forall t > 0,\\; g_{\\text{nat}} \\neq 0 \\parallel OV",
+          "\\theta < 90^\\circ \\implies OM \\not\\parallel OV \\implies \\perp",
+          "\\therefore \\overline{OA} \\to \\widehat{AB} \\to \\overline{BC'} \\;\\;\\text{falsified}"
+        ],
+        highlight: ["refuted", "gravity", "om"]
+      },
+      {
+        id: 3,
+        tag: "III · 1546",
+        badge: "O → P → R",
+        tex: [
+          "\\widehat{OPR} \\cap OM = \\{O\\}",
+          "t \\to 0^+ \\implies \\delta_{\\text{dev}} \\ll L",
+          "t > t_P \\implies \\text{Impetus} \\downarrow \\;\\implies\\; \\text{Curvature} \\uparrow"
+        ],
+        highlight: ["tartaglia", "om", "gravity", "apex"]
+      },
+      {
+        id: 4,
+        tag: "IV · Limits",
+        badge: "0° < θ < 90°",
+        tex: [
+          "\\theta = 0^\\circ \\;(n=0) \\implies XM = 0 \\implies R \\to 0",
+          "\\theta = 90^\\circ \\;(n=12) \\implies OX = 0 \\implies R = 0",
+          "0^\\circ < \\theta < 90^\\circ \\implies \\exists\\,\\theta^* : R(\\theta^*) = R_{\\max}"
+        ],
+        highlight: ["ghosts", "axes", "quadrant", "tartaglia"]
+      },
+      {
+        id: 5,
+        tag: "V · Euclid I.47",
+        badge: "△OXM",
+        tex: [
+          "M \\perp OH \\implies X \\in OH, \\quad \\angle OXM = 90^\\circ",
+          "OX \\parallel OH, \\qquad XM \\parallel OV",
+          "OX^2 + XM^2 = OM^2 = L^2"
+        ],
+        highlight: ["triangle", "om", "euclid_inset"]
+      },
+      {
+        id: 6,
+        tag: "VI · Euclid III.31",
+        badge: "CD = L",
+        tex: [
+          "\\widehat{CD}:\\; CD = L, \\quad Q \\in \\widehat{CD} \\implies \\angle CQD = 90^\\circ",
+          "\\triangle CQD \\cong \\triangle OXM \\implies CQ = OX,\\; QD = XM",
+          "OX \\cdot XM = L \\cdot QY = 2\\,\\text{Area}(\\triangle OXM) \\propto R"
+        ],
+        highlight: ["semicircle", "triangle", "euclid_inset"]
+      },
+      {
+        id: 7,
+        tag: "VII · Euclid II.4–5",
+        badge: "max(OX·XM)",
+        tex: [
+          "(OX - XM)^2 = OX^2 + XM^2 - 2\\,OX \\cdot XM",
+          "2\\,OX \\cdot XM = L^2 - (OX - XM)^2",
+          "OX \\cdot XM = \\frac{L^2 - (OX - XM)^2}{2}",
+          "(OX - XM)^2 \\ge 0 \\implies \\max(OX\\cdot XM) \\iff OX = XM"
+        ],
+        highlight: ["triangle", "euclid_inset", "semicircle"]
+      },
+      {
+        id: 8,
+        tag: "VIII · Opt. 45°",
+        badge: "Euclid I.5, I.32",
+        tex: [
+          "OX = XM \\implies \\triangle OXM \\text{ isosceles}",
+          "\\theta + \\theta + 90^\\circ = 180^\\circ \\implies \\theta = 45^\\circ \\;(n = 6)",
+          "R(45^\\circ) = R_{\\max} = 1200",
+          "R(30^\\circ), R(60^\\circ) \\approx 1040; \\quad R(15^\\circ), R(75^\\circ) \\approx 600"
+        ],
+        highlight: ["tartaglia", "ghosts", "triangle", "range_markers", "quadrant"]
+      }
+    ];
+
+    const state = {
+      thetaDeg: 45,
+      L: 100,
+      t: 0.55,
+      playing: true,
+      stepIdx: 0,
+      dragging: false
+    };
+
+    const canvas = document.getElementById("simCanvas");
+    const ctx = canvas.getContext("2d");
+
+    const sliderTheta = document.getElementById("slider-theta");
+    const sliderL = document.getElementById("slider-L");
+    const sliderT = document.getElementById("slider-t");
+    const btnPlay = document.getElementById("btn-play");
+    const btnPrev = document.getElementById("btn-prev");
+    const btnNext = document.getElementById("btn-next");
+    const btnReset = document.getElementById("btn-reset");
+    const stepsContainer = document.getElementById("steps-container");
+    const stepIndicator = document.getElementById("step-indicator");
+
+    function renderTex(el, tex, displayMode = false) {
+      if (typeof katex !== "undefined") {
+        katex.render(tex, el, { throwOnError: false, displayMode });
+      } else {
+        el.textContent = tex;
+      }
+    }
+
+    function initStaticKaTeX() {
+      renderTex(document.getElementById("lbl-theta"), "\\theta");
+      renderTex(document.getElementById("lbl-L"), "L");
+      renderTex(document.getElementById("lbl-t"), "t");
+      renderTex(document.getElementById("derivation-header"), "\\text{Euclid I–III } \\vdash \\; \\theta^* = 45^\\circ");
+
+      stepsContainer.innerHTML = "";
+      STEPS.forEach((step, idx) => {
+        const card = document.createElement("button");
+        card.type = "button";
+        card.className = "step-card text-left w-full rounded-lg border border-slate-800/90 bg-[#090d16] p-2.5 hover:border-slate-700 focus:outline-none";
+        card.dataset.index = idx;
+
+        const header = document.createElement("div");
+        header.className = "flex items-center justify-between mb-1.5";
+        header.innerHTML = `<span class="text-[11px] font-mono font-semibold text-amber-400">${step.tag}</span>
+                            <span class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-slate-400">${step.badge}</span>`;
+        card.appendChild(header);
+
+        const mathWrap = document.createElement("div");
+        mathWrap.className = "text-slate-200 overflow-x-auto";
+        step.tex.forEach((line) => {
+          const lineDiv = document.createElement("div");
+          renderTex(lineDiv, line, true);
+          mathWrap.appendChild(lineDiv);
+        });
+        card.appendChild(mathWrap);
+
+        card.addEventListener("click", () => {
+          setStep(idx);
+        });
+        stepsContainer.appendChild(card);
+      });
+      updateStepUI();
+    }
+
+    function setStep(idx) {
+      state.stepIdx = Math.max(0, Math.min(STEPS.length - 1, idx));
+      updateStepUI();
+      const activeCard = stepsContainer.children[state.stepIdx];
+      if (activeCard) {
+        activeCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      }
+    }
+
+    function updateStepUI() {
+      stepIndicator.textContent = `${state.stepIdx + 1} / ${STEPS.length}`;
+      Array.from(stepsContainer.children).forEach((card, i) => {
+        card.classList.toggle("active", i === state.stepIdx);
+      });
+    }
+
+    function updateReadouts() {
+      const rad = (state.thetaDeg * Math.PI) / 180;
+      const pts = state.thetaDeg / 7.5;
+      const OX = state.L * Math.cos(rad);
+      const XM = state.L * Math.sin(rad);
+      const prod = OX * XM;
+      const maxProd = (state.L * state.L) / 2;
+      const range = 1200 * Math.pow(state.L / 100, 2) * Math.sin(2 * rad);
+
+      document.getElementById("val-theta").textContent = `${state.thetaDeg.toFixed(1)}° (${pts.toFixed(1)} pt)`;
+      document.getElementById("val-L").textContent = `${state.L}`;
+      document.getElementById("val-t").textContent = `${state.t.toFixed(2)}`;
+
+      renderTex(document.getElementById("ro-theta"), `\\theta = ${state.thetaDeg.toFixed(1)}^\\circ \\;(${pts.toFixed(1)}\\text{ pt})`);
+      renderTex(document.getElementById("ro-impetus"), `L = ${state.L}`);
+      renderTex(document.getElementById("ro-components"), `OX=${OX.toFixed(1)},\\; XM=${XM.toFixed(1)}`);
+      renderTex(document.getElementById("ro-product"), `OX\\cdot XM = ${prod.toFixed(0)} \\;(\\le ${maxProd.toFixed(0)})`);
+      renderTex(document.getElementById("ro-range"), `R = ${Math.max(0, range).toFixed(0)}`);
+    }
+
+    // Geometry helper
+    function getGeom(W, H) {
+      const ox = 72;
+      const oy = H - 62;
+      const pxPerPace = Math.min((W - ox - 45) / 1200, (oy - 48) / 760);
+      const L_px = (state.L / 100) * Math.min(540 * pxPerPace, (oy - 60) * 0.78);
+      const rad = (state.thetaDeg * Math.PI) / 180;
+      return { ox, oy, pxPerPace, L_px, rad };
+    }
+
+    function tartagliaPoint(thetaRad, L, pxPerPace, s) {
+      const c = 0.55;
+      const denom = 1 - Math.exp(-c);
+      const u = (1 - Math.exp(-c * s)) / denom;
+      const R_paces = 1200 * Math.pow(L / 100, 2) * Math.sin(2 * thetaRad);
+      const R_px = R_paces * pxPerPace;
+      const x = R_px * u;
+      // R * tan(theta) = 2400 * (L/100)^2 * sin^2(theta)
+      const H_scale = 2400 * Math.pow(L / 100, 2) * Math.pow(Math.sin(thetaRad), 2) * pxPerPace;
+      const y = H_scale * u * (1 - s);
+      return { x, y, R_px, R_paces };
+    }
+
+    function refutedPathData(thetaRad, L_px) {
+      const d1 = 0.48 * L_px;
+      const Ax = d1 * Math.cos(thetaRad);
+      const Ay = d1 * Math.sin(thetaRad);
+
+      if (thetaRad <= 0.008) {
+        return {
+          mode: "flat",
+          Ax, Ay, Bx: Ax, By: 0, Cx: Ax,
+          sample(s) { return { x: Ax * s, y: 0 }; }
+        };
+      }
+      if (thetaRad >= Math.PI / 2 - 0.008) {
+        return {
+          mode: "vert",
+          Ax: 0, Ay: d1, Bx: 0, By: d1, Cx: 0,
+          sample(s) {
+            if (s < 0.5) return { x: 0, y: d1 * (s * 2) };
+            return { x: 0, y: d1 * (1 - (s - 0.5) * 2) };
+          }
+        };
+      }
+
+      const rc = Math.min(0.28 * L_px, (0.72 * Ay) / Math.cos(thetaRad));
+      const Ocx = Ax + rc * Math.sin(thetaRad);
+      const Ocy = Ay - rc * Math.cos(thetaRad);
+      const Bx = Ocx + rc;
+      const By = Ocy;
+      const Cx = Bx;
+
+      const l1 = d1;
+      const l2 = rc * (thetaRad + Math.PI / 2);
+      const l3 = By;
+      const total = l1 + l2 + l3;
+
+      return {
+        mode: "3stage",
+        Ax, Ay, Ocx, Ocy, rc, Bx, By, Cx,
+        sample(s) {
+          const dist = s * total;
+          if (dist <= l1) {
+            const u = dist / l1;
+            return { x: Ax * u, y: Ay * u };
+          } else if (dist <= l1 + l2) {
+            const u = (dist - l1) / l2;
+            const phi = (thetaRad + Math.PI / 2) * (1 - u);
+            return {
+              x: Ocx + rc * Math.cos(phi),
+              y: Ocy + rc * Math.sin(phi)
+            };
+          } else {
+            const u = (dist - l1 - l2) / Math.max(1e-6, l3);
+            return { x: Bx, y: By * (1 - u) };
+          }
+        }
+      };
+    }
+
+    function drawArrow(x1, y1, x2, y2, color, lw = 1.5, head = 7) {
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      const len = Math.hypot(dx, dy);
+      if (len < 2) return;
+      const ang = Math.atan2(dy, dx);
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.fillStyle = color;
+      ctx.lineWidth = lw;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x2, y2);
+      ctx.lineTo(x2 - head * Math.cos(ang - 0.42), y2 - head * Math.sin(ang - 0.42));
+      ctx.lineTo(x2 - head * Math.cos(ang + 0.42), y2 - head * Math.sin(ang + 0.42));
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function drawDot(x, y, label, color = "#e2e8f0", r = 4, dx = 6, dy = -6) {
+      ctx.save();
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#090d16";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      if (label) {
+        ctx.font = "600 12px ui-monospace, SFMono-Regular, Menlo, monospace";
+        ctx.fillStyle = color;
+        ctx.fillText(label, x + dx, y + dy);
+      }
+      ctx.restore();
+    }
+
+    function draw() {
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      const W = rect.width;
+      const H = rect.height;
+      if (W === 0 || H === 0) return;
+
+      if (canvas.width !== Math.round(W * dpr) || canvas.height !== Math.round(H * dpr)) {
+        canvas.width = Math.round(W * dpr);
+        canvas.height = Math.round(H * dpr);
+      }
+
+      ctx.save();
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0, 0, W, H);
+
+      const activeH = new Set(STEPS[state.stepIdx].highlight);
+      const { ox, oy, pxPerPace, L_px, rad } = getGeom(W, H);
+      const toX = (x) => ox + x;
+      const toY = (y) => oy - y;
+
+      // 1. Subtle Blueprint Grid
+      ctx.save();
+      ctx.strokeStyle = "rgba(30, 41, 59, 0.45)";
+      ctx.lineWidth = 1;
+      const stepPx = 200 * pxPerPace;
+      if (stepPx > 25) {
+        for (let p = 0; p <= 1200; p += 200) {
+          const gx = ox + p * pxPerPace;
+          ctx.beginPath();
+          ctx.moveTo(gx, 25);
+          ctx.lineTo(gx, oy);
+          ctx.stroke();
+        }
+        for (let y = oy - stepPx; y > 25; y -= stepPx) {
+          ctx.beginPath();
+          ctx.moveTo(ox, y);
+          ctx.lineTo(W - 25, y);
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+
+      // 2. Horizon OH & Vertical OV
+      const axisGlow = activeH.has("axes");
+      ctx.save();
+      ctx.strokeStyle = axisGlow ? "#94a3b8" : "#475569";
+      ctx.lineWidth = axisGlow ? 2 : 1.5;
+
+      // OH
+      ctx.beginPath();
+      ctx.moveTo(ox - 12, oy);
+      ctx.lineTo(W - 24, oy);
+      ctx.stroke();
+      // OV
+      ctx.beginPath();
+      ctx.moveTo(ox, oy + 12);
+      ctx.lineTo(ox, 28);
+      ctx.stroke();
+
+      // Right angle at O
+      ctx.strokeStyle = axisGlow ? "#f59e0b" : "#475569";
+      ctx.strokeRect(ox, oy - 12, 12, 12);
+
+      ctx.fillStyle = "#94a3b8";
+      ctx.font = "600 12px ui-monospace, SFMono-Regular, Menlo, monospace";
+      ctx.fillText("H", W - 34, oy + 16);
+      ctx.fillText("V", ox - 16, 36);
+      ctx.restore();
+
+      // Scale ticks along OH (paces)
+      ctx.save();
+      ctx.font = "10px ui-monospace, SFMono-Regular, Menlo, monospace";
+      ctx.fillStyle = "#64748b";
+      for (let p = 200; p <= 1200; p += 200) {
+        const tx = ox + p * pxPerPace;
+        ctx.strokeStyle = "#334155";
+        ctx.beginPath();
+        ctx.moveTo(tx, oy - 3);
+        ctx.lineTo(tx, oy + 4);
+        ctx.stroke();
+        ctx.fillText(String(p), tx - 10, oy + 16);
+      }
+      ctx.restore();
+
+      // 3. Ghost Comparison Trajectories (Steps 4 & 8)
+      if (activeH.has("ghosts")) {
+        const presetPts = [2, 4, 6, 8, 10];
+        presetPts.forEach((pt) => {
+          const deg = pt * 7.5;
+          const r = (deg * Math.PI) / 180;
+          const isOpt = pt === 6;
+          ctx.save();
+          ctx.strokeStyle = isOpt ? "rgba(245, 158, 11, 0.55)" : "rgba(100, 116, 139, 0.35)";
+          ctx.lineWidth = isOpt ? 1.8 : 1.1;
+          ctx.setLineDash(isOpt ? [6, 4] : [3, 4]);
+          ctx.beginPath();
+          for (let i = 0; i <= 60; i++) {
+            const s = i / 60;
+            const p = tartagliaPoint(r, state.L, pxPerPace, s);
+            const px = toX(p.x), py = toY(p.y);
+            if (i === 0) ctx.moveTo(px, py);
+            else ctx.lineTo(px, py);
+          }
+          ctx.stroke();
+
+          if (activeH.has("range_markers")) {
+            const end = tartagliaPoint(r, state.L, pxPerPace, 1);
+            ctx.setLineDash([]);
+            ctx.fillStyle = isOpt ? "#fbbf24" : "#94a3b8";
+            ctx.beginPath();
+            ctx.arc(toX(end.x), oy, isOpt ? 4.5 : 3, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.font = "10px ui-monospace, SFMono-Regular, Menlo, monospace";
+            const yOff = pt === 8 ? 27 : pt === 10 ? 27 : -8;
+            ctx.fillText(`${deg}° (${Math.round(end.R_paces)})`, toX(end.x) - 22, oy + yOff);
+          }
+          ctx.restore();
+        });
+      }
+
+      // 4. 12-Point Gunner's Quadrant
+      const qRadius = Math.min(96, L_px * 0.45);
+      const qGlow = activeH.has("quadrant");
+      ctx.save();
+      ctx.strokeStyle = qGlow ? "rgba(251, 191, 36, 0.85)" : "rgba(148, 163, 184, 0.35)";
+      ctx.lineWidth = qGlow ? 2 : 1.2;
+      ctx.beginPath();
+      ctx.arc(ox, oy, qRadius, -Math.PI / 2, 0);
+      ctx.stroke();
+
+      // Angle sector fill
+      ctx.fillStyle = "rgba(245, 158, 11, 0.10)";
+      ctx.beginPath();
+      ctx.moveTo(ox, oy);
+      ctx.arc(ox, oy, qRadius * 0.72, -rad, 0);
+      ctx.closePath();
+      ctx.fill();
+
+      for (let n = 0; n <= 12; n++) {
+        const a = (n * 7.5 * Math.PI) / 180;
+        const rIn = n % 2 === 0 ? qRadius - 7 : qRadius - 4;
+        const rOut = qRadius + (n === 6 ? 4 : 2);
+        ctx.strokeStyle = n === 6 ? "#fbbf24" : (qGlow ? "#cbd5e1" : "#64748b");
+        ctx.lineWidth = n === 6 ? 2 : 1;
+        ctx.beginPath();
+        ctx.moveTo(ox + rIn * Math.cos(a), oy - rIn * Math.sin(a));
+        ctx.lineTo(ox + rOut * Math.cos(a), oy - rOut * Math.sin(a));
+        ctx.stroke();
+        if (n % 2 === 0 && qRadius > 55) {
+          ctx.fillStyle = n === 6 ? "#fbbf24" : "#64748b";
+          ctx.font = "9px ui-monospace, SFMono-Regular, Menlo, monospace";
+          const lx = ox + (qRadius + 12) * Math.cos(a) - 4;
+          const ly = oy - (qRadius + 12) * Math.sin(a) + 3;
+          ctx.fillText(String(n), lx, ly);
+        }
+      }
+      ctx.fillStyle = "#fbbf24";
+      ctx.font = "600 11px ui-monospace, SFMono-Regular, Menlo, monospace";
+      ctx.fillText("θ", ox + (qRadius * 0.48) * Math.cos(rad / 2), oy - (qRadius * 0.48) * Math.sin(rad / 2) + 4);
+      ctx.restore();
+
+      // 5. Semicircle CD = L (Euclid III.31)
+      const showSemi = activeH.has("semicircle");
+      if (showSemi || state.stepIdx >= 4) {
+        const alpha = showSemi ? 1 : 0.25;
+        const Cx = ox;
+        const Dx = ox + L_px;
+        const midX = ox + L_px / 2;
+        const radSemi = L_px / 2;
+        const Qx = ox + L_px * Math.cos(rad) * Math.cos(rad);
+        const Qy = L_px * Math.cos(rad) * Math.sin(rad);
+
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        ctx.strokeStyle = "#a78bfa";
+        ctx.lineWidth = showSemi ? 2 : 1.2;
+        ctx.beginPath();
+        ctx.arc(midX, oy, radSemi, Math.PI, 0);
+        ctx.stroke();
+
+        // Triangle CQD and altitude QY
+        ctx.strokeStyle = "#c4b5fd";
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.moveTo(Cx, oy);
+        ctx.lineTo(toX(Qx), toY(Qy));
+        ctx.lineTo(Dx, oy);
+        ctx.stroke();
+
+        // Altitude QY
+        ctx.setLineDash([4, 3]);
+        ctx.strokeStyle = "#34d399";
+        ctx.beginPath();
+        ctx.moveTo(toX(Qx), toY(Qy));
+        ctx.lineTo(toX(Qx), oy);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        if (showSemi) {
+          drawDot(Cx, oy + 0.1, "C", "#a78bfa", 3.5, -14, 15);
+          drawDot(Dx, oy, "D", "#a78bfa", 4, 4, 15);
+          drawDot(toX(Qx), toY(Qy), "Q", "#c4b5fd", 4, 5, -6);
+          drawDot(toX(Qx), oy, "Y", "#34d399", 3, -4, 14);
+        }
+        ctx.restore();
+      }
+
+      // 6. Triangle OXM & Line of Sight OM = L
+      const Mx = L_px * Math.cos(rad);
+      const My = L_px * Math.sin(rad);
+      const triGlow = activeH.has("triangle");
+      const omGlow = activeH.has("om");
+
+      ctx.save();
+      if (triGlow || state.stepIdx >= 4) {
+        ctx.fillStyle = triGlow ? "rgba(34, 211, 238, 0.10)" : "rgba(34, 211, 238, 0.04)";
+        ctx.beginPath();
+        ctx.moveTo(ox, oy);
+        ctx.lineTo(toX(Mx), oy);
+        ctx.lineTo(toX(Mx), toY(My));
+        ctx.closePath();
+        ctx.fill();
+
+        // OX
+        ctx.strokeStyle = triGlow ? "#22d3ee" : "rgba(34, 211, 238, 0.45)";
+        ctx.lineWidth = triGlow ? 3 : 1.5;
+        ctx.beginPath();
+        ctx.moveTo(ox, oy);
+        ctx.lineTo(toX(Mx), oy);
+        ctx.stroke();
+
+        // XM
+        ctx.strokeStyle = triGlow ? "#34d399" : "rgba(52, 211, 153, 0.45)";
+        ctx.lineWidth = triGlow ? 3 : 1.5;
+        ctx.beginPath();
+        ctx.moveTo(toX(Mx), oy);
+        ctx.lineTo(toX(Mx), toY(My));
+        ctx.stroke();
+
+        // Right angle at X
+        if (Mx > 12 && My > 12) {
+          ctx.strokeStyle = "#94a3b8";
+          ctx.lineWidth = 1.2;
+          ctx.strokeRect(toX(Mx) - 10, oy - 10, 10, 10);
+        }
+
+        if (triGlow) {
+          ctx.font = "600 11px ui-monospace, SFMono-Regular, Menlo, monospace";
+          ctx.fillStyle = "#22d3ee";
+          ctx.fillText("OX", ox + Mx / 2 - 8, oy + 16);
+          ctx.fillStyle = "#34d399";
+          ctx.fillText("XM", toX(Mx) + 6, oy - My / 2 + 4);
+          drawDot(toX(Mx), oy, "X", "#22d3ee", 4, -4, 15);
+        }
+      }
+
+      // Ray OM (Line of sight / tangent)
+      ctx.strokeStyle = omGlow ? "#38bdf8" : "rgba(56, 189, 248, 0.55)";
+      ctx.lineWidth = omGlow ? 2.4 : 1.5;
+      ctx.setLineDash([7, 4]);
+      ctx.beginPath();
+      ctx.moveTo(ox, oy);
+      ctx.lineTo(toX(Mx), toY(My));
+      ctx.stroke();
+      ctx.setLineDash([]);
+      drawDot(toX(Mx), toY(My), "M (L)", "#38bdf8", 4, 6, -6);
+      ctx.restore();
+
+      // 7. Refuted 3-Stage Path (1537)
+      const refData = refutedPathData(rad, L_px);
+      const refGlow = activeH.has("refuted");
+      if (refGlow || state.stepIdx <= 2) {
+        ctx.save();
+        ctx.strokeStyle = refGlow ? "#fb7185" : "rgba(251, 113, 133, 0.35)";
+        ctx.lineWidth = refGlow ? 2.5 : 1.4;
+        ctx.setLineDash([5, 4]);
+        ctx.beginPath();
+        for (let i = 0; i <= 80; i++) {
+          const p = refData.sample(i / 80);
+          const px = toX(p.x), py = toY(p.y);
+          if (i === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        if (refGlow && refData.mode === "3stage") {
+          drawDot(toX(refData.Ax), toY(refData.Ay), "A", "#fb7185", 4, -4, -9);
+          drawDot(toX(refData.Bx), toY(refData.By), "B", "#fb7185", 4, 6, -4);
+          drawDot(toX(refData.Cx), oy, "C′", "#fb7185", 4, 5, 14);
+        }
+        ctx.restore();
+      }
+
+      // 8. Gravity Vectors along OA / near O (Steps 2 & 3)
+      if (activeH.has("gravity")) {
+        [0.14, 0.28, 0.42].forEach((f) => {
+          const gx = toX(L_px * f * Math.cos(rad));
+          const gy = toY(L_px * f * Math.sin(rad));
+          drawArrow(gx, gy, gx, gy + 26, "#f43f5e", 1.6, 6);
+        });
+        ctx.save();
+        ctx.fillStyle = "#fb7185";
+        ctx.font = "600 11px ui-monospace, SFMono-Regular, Menlo, monospace";
+        const gLabelX = toX(L_px * 0.28 * Math.cos(rad)) + 6;
+        const gLabelY = toY(L_px * 0.28 * Math.sin(rad)) + 22;
+        ctx.fillText("g_nat", gLabelX, gLabelY);
+        ctx.restore();
+      }
+
+      // 9. Tartaglia Continuous Trajectory (1546)
+      const tartGlow = activeH.has("tartaglia");
+      ctx.save();
+      ctx.strokeStyle = tartGlow ? "#fbbf24" : "rgba(251, 191, 36, 0.72)";
+      ctx.lineWidth = tartGlow ? 3.2 : 2.2;
+      if (tartGlow) {
+        ctx.shadowColor = "rgba(245, 158, 11, 0.45)";
+        ctx.shadowBlur = 10;
+      }
+      ctx.beginPath();
+      let apex = { x: 0, y: -1 };
+      for (let i = 0; i <= 100; i++) {
+        const s = i / 100;
+        const p = tartagliaPoint(rad, state.L, pxPerPace, s);
+        if (p.y > apex.y) apex = { x: p.x, y: p.y };
+        const px = toX(p.x), py = toY(p.y);
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+      ctx.restore();
+
+      const landPt = tartagliaPoint(rad, state.L, pxPerPace, 1);
+      if (apex.y > 8) {
+        drawDot(toX(apex.x), toY(apex.y), "P", "#fbbf24", 4, -4, -9);
+      }
+      drawDot(toX(landPt.x), oy, "R", "#fbbf24", 4.5, 6, 15);
+
+      // 10. Animated Projectile(s) at time t
+      const proj = tartagliaPoint(rad, state.L, pxPerPace, state.t);
+      drawDot(toX(proj.x), toY(proj.y), "", "#fef08a", 6);
+      if (refGlow) {
+        const rProj = refData.sample(state.t);
+        drawDot(toX(rProj.x), toY(rProj.y), "", "#fda4af", 5);
+      }
+
+      // 11. Cannon Barrel at O
+      ctx.save();
+      ctx.translate(ox, oy);
+      ctx.rotate(-rad);
+      ctx.fillStyle = "#334155";
+      ctx.strokeStyle = "#94a3b8";
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.roundRect(-6, -5, 34, 10, 3);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+      drawDot(ox, oy, "O", "#f8fafc", 4.5, -16, 15);
+
+      // 12. Top-Right Euclidean Area & Square Diagram (Euclid I.47, II.4-5, III.31)
+      if (activeH.has("euclid_inset") || state.stepIdx >= 4) {
+        const boxW = 148;
+        const boxH = 128;
+        const bx = W - boxW - 14;
+        const by = 14;
+        if (bx > ox + 180) {
+          ctx.save();
+          ctx.fillStyle = "rgba(11, 16, 27, 0.86)";
+          ctx.strokeStyle = activeH.has("euclid_inset") ? "rgba(245, 158, 11, 0.65)" : "rgba(51, 65, 85, 0.7)";
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.roundRect(bx, by, boxW, boxH, 8);
+          ctx.fill();
+          ctx.stroke();
+
+          const scaleS = 84;
+          const x0 = bx + 32;
+          const y0 = by + 24;
+          const oxN = Math.cos(rad) * scaleS;
+          const xmN = Math.sin(rad) * scaleS;
+
+          // L^2 / 2 reference outline
+          ctx.strokeStyle = "rgba(148, 163, 184, 0.25)";
+          ctx.strokeRect(x0, y0, scaleS / Math.SQRT2, scaleS / Math.SQRT2);
+
+          // Rectangle OX * XM
+          ctx.fillStyle = "rgba(52, 211, 153, 0.22)";
+          ctx.strokeStyle = "#34d399";
+          ctx.lineWidth = 1.5;
+          ctx.fillRect(x0, y0, oxN, xmN);
+          ctx.strokeRect(x0, y0, oxN, xmN);
+
+          // Difference square (OX - XM)^2
+          const diff = Math.abs(oxN - xmN);
+          if (diff > 1.5) {
+            ctx.fillStyle = "rgba(251, 113, 133, 0.25)";
+            ctx.strokeStyle = "#fb7185";
+            ctx.fillRect(x0 + Math.min(oxN, xmN), y0 + Math.min(oxN, xmN), diff, diff);
+            ctx.strokeRect(x0 + Math.min(oxN, xmN), y0 + Math.min(oxN, xmN), diff, diff);
+          }
+
+          ctx.font = "600 10px ui-monospace, SFMono-Regular, Menlo, monospace";
+          ctx.fillStyle = "#22d3ee";
+          ctx.fillText("OX", x0 + oxN / 2 - 6, y0 - 6);
+          ctx.fillStyle = "#34d399";
+          ctx.fillText("XM", x0 - 20, y0 + xmN / 2 + 3);
+          ctx.fillStyle = "#cbd5e1";
+          const pct = Math.round(Math.sin(2 * rad) * 100);
+          ctx.fillText(`OX·XM: ${pct}%`, bx + 12, by + boxH - 10);
+          ctx.restore();
+        }
+      }
+
+      ctx.restore();
+    }
+
+    // Animation Loop
+    let lastTs = 0;
+    function tick(ts) {
+      if (!lastTs) lastTs = ts;
+      const dt = Math.min(0.05, (ts - lastTs) / 1000);
+      lastTs = ts;
+
+      if (state.playing) {
+        state.t += dt * 0.36;
+        if (state.t > 1) state.t = 0;
+        sliderT.value = state.t.toFixed(3);
+        document.getElementById("val-t").textContent = state.t.toFixed(2);
+      }
+
+      draw();
+      requestAnimationFrame(tick);
+    }
+
+    // Event Listeners
+    sliderTheta.addEventListener("input", (e) => {
+      state.thetaDeg = parseFloat(e.target.value);
+      updateReadouts();
+    });
+
+    sliderL.addEventListener("input", (e) => {
+      state.L = parseFloat(e.target.value);
+      updateReadouts();
+    });
+
+    sliderT.addEventListener("input", (e) => {
+      state.t = parseFloat(e.target.value);
+      state.playing = false;
+      btnPlay.textContent = "Play";
+      updateReadouts();
+    });
+
+    btnPlay.addEventListener("click", () => {
+      state.playing = !state.playing;
+      btnPlay.textContent = state.playing ? "Pause" : "Play";
+    });
+
+    btnPrev.addEventListener("click", () => setStep(state.stepIdx - 1));
+    btnNext.addEventListener("click", () => setStep(state.stepIdx + 1));
+
+    btnReset.addEventListener("click", () => {
+      state.thetaDeg = 45;
+      state.L = 100;
+      state.t = 0;
+      state.playing = true;
+      sliderTheta.value = 45;
+      sliderL.value = 100;
+      sliderT.value = 0;
+      btnPlay.textContent = "Pause";
+      setStep(0);
+      updateReadouts();
+    });
+
+    document.querySelectorAll(".pt-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const pt = parseFloat(btn.dataset.pt);
+        state.thetaDeg = pt * 7.5;
+        sliderTheta.value = state.thetaDeg;
+        updateReadouts();
+      });
+    });
+
+    // Canvas Drag for Angle θ
+    function pointerToTheta(clientX, clientY) {
+      const rect = canvas.getBoundingClientRect();
+      const { ox, oy } = getGeom(rect.width, rect.height);
+      const dx = clientX - rect.left - ox;
+      const dy = oy - (clientY - rect.top);
+      let deg = (Math.atan2(Math.max(0, dy), Math.max(0.001, dx)) * 180) / Math.PI;
+      deg = Math.max(0, Math.min(90, Math.round(deg * 2) / 2));
+      state.thetaDeg = deg;
+      sliderTheta.value = deg;
+      updateReadouts();
+    }
+
+    canvas.addEventListener("pointerdown", (e) => {
+      state.dragging = true;
+      canvas.setPointerCapture(e.pointerId);
+      pointerToTheta(e.clientX, e.clientY);
+    });
+    canvas.addEventListener("pointermove", (e) => {
+      if (state.dragging) pointerToTheta(e.clientX, e.clientY);
+    });
+    canvas.addEventListener("pointerup", () => {
+      state.dragging = false;
+    });
+    canvas.addEventListener("pointercancel", () => {
+      state.dragging = false;
+    });
+
+    window.addEventListener("load", () => {
+      btnPlay.textContent = state.playing ? "Pause" : "Play";
+      initStaticKaTeX();
+      updateReadouts();
+      requestAnimationFrame(tick);
+    });
+  </script>
+</body>
+</html>
