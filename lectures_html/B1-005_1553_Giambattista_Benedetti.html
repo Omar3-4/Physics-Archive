@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Benedetti (1553) — De Motu Gravium</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+  <style>
+    :root {
+      color-scheme: dark;
+    }
+    body {
+      background-color: #060911;
+      color: #e2e8f0;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      overflow-x: hidden;
+    }
+    .katex {
+      font-size: 0.98em;
+    }
+    .step-card {
+      transition: all 0.2s ease;
+    }
+    .step-card.active {
+      background: rgba(30, 58, 138, 0.28);
+      border-color: #38bdf8;
+      box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.45), 0 8px 24px -8px rgba(14, 165, 233, 0.35);
+    }
+    input[type="range"] {
+      accent-color: #38bdf8;
+    }
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #090d16;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #1e293b;
+      border-radius: 9999px;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col bg-[#060911] text-slate-200 select-none">
+
+  <!-- Top Symbolic Header & Live KaTeX Parameter Readouts -->
+  <header class="border-b border-slate-800/90 bg-[#0b101b]/95 backdrop-blur px-4 py-2.5 flex flex-wrap items-center justify-between gap-3">
+    <div class="flex items-center gap-3">
+      <span class="px-2 py-0.5 rounded bg-sky-500/15 border border-sky-500/30 text-sky-300 text-xs font-mono tracking-wider">1553</span>
+      <span class="text-sm font-semibold tracking-wide text-slate-100">G. Benedetti · <span class="text-sky-300 font-mono">B1-005</span></span>
+    </div>
+    <div id="live-readouts" class="flex flex-wrap items-center gap-2 text-xs"></div>
+  </header>
+
+  <!-- Main Workspace -->
+  <main class="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-3 p-3 max-w-[1680px] w-full mx-auto">
+
+    <!-- Left Column: Canvas + Controls -->
+    <section class="lg:col-span-7 xl:col-span-8 flex flex-col gap-3">
+      <!-- Canvas Container -->
+      <div class="relative flex-1 min-h-[460px] lg:min-h-[560px] rounded-xl border border-slate-800 bg-[#090d16] overflow-hidden shadow-2xl">
+        <canvas id="geomCanvas" class="w-full h-full block"></canvas>
+        <!-- Minimal Mode Badge inside Canvas -->
+        <div id="canvas-badge" class="pointer-events-none absolute top-3 left-3 px-2.5 py-1 rounded-md bg-slate-900/80 border border-slate-700/70 text-xs font-mono text-sky-300"></div>
+      </div>
+
+      <!-- Interactive Controls & Sliders -->
+      <div class="rounded-xl border border-slate-800 bg-[#0b101b] p-3 flex flex-col gap-3">
+        <!-- Playback & Step Bar -->
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div class="flex items-center gap-2">
+            <button id="btn-play" class="px-3.5 py-1.5 rounded-lg bg-sky-500/20 hover:bg-sky-500/30 border border-sky-400/40 text-sky-200 text-xs font-mono font-semibold flex items-center gap-1.5 transition">
+              <span id="play-icon">▶</span>
+              <span id="play-label">PLAY</span>
+            </button>
+            <button id="btn-reset" class="px-2.5 py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-slate-300 text-xs font-mono transition" title="t = 0">↺</button>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <button id="btn-prev" class="px-3 py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-slate-200 text-xs font-mono transition">◀</button>
+            <span id="step-indicator" class="px-2.5 py-1 rounded bg-slate-900 border border-slate-800 text-xs font-mono text-sky-300">1 / 7</span>
+            <button id="btn-next" class="px-3 py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700 text-slate-200 text-xs font-mono transition">▶</button>
+          </div>
+        </div>
+
+        <!-- Sliders Grid (Pure Symbolic Labels) -->
+        <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-1 border-t border-slate-800/80">
+          <!-- k -->
+          <div class="flex flex-col gap-1">
+            <div class="flex items-center justify-between text-xs">
+              <span class="katex-label text-amber-300" data-tex="k = V_A / V_B"></span>
+              <span id="val-k" class="font-mono text-slate-200">4</span>
+            </div>
+            <input id="slider-k" type="range" min="2" max="6" step="1" value="4" class="w-full h-1.5 bg-slate-800 rounded-lg cursor-pointer" />
+          </div>
+
+          <!-- P_A -->
+          <div id="wrap-pa" class="flex flex-col gap-1 transition-opacity">
+            <div class="flex items-center justify-between text-xs">
+              <span class="katex-label text-sky-300" data-tex="P_A"></span>
+              <span id="val-pa" class="font-mono text-slate-200">11</span>
+            </div>
+            <input id="slider-pa" type="range" min="3" max="15" step="1" value="11" class="w-full h-1.5 bg-slate-800 rounded-lg cursor-pointer" />
+          </div>
+
+          <!-- P_B -->
+          <div class="flex flex-col gap-1">
+            <div class="flex items-center justify-between text-xs">
+              <span class="katex-label text-emerald-300" data-tex="P_B"></span>
+              <span id="val-pb" class="font-mono text-slate-200">3</span>
+            </div>
+            <input id="slider-pb" type="range" min="3" max="15" step="1" value="3" class="w-full h-1.5 bg-slate-800 rounded-lg cursor-pointer" />
+          </div>
+
+          <!-- M -->
+          <div class="flex flex-col gap-1">
+            <div class="flex items-center justify-between text-xs">
+              <span class="katex-label text-cyan-300" data-tex="M"></span>
+              <span id="val-m" class="font-mono text-slate-200">1.0</span>
+            </div>
+            <input id="slider-m" type="range" min="0.5" max="2.5" step="0.5" value="1" class="w-full h-1.5 bg-slate-800 rounded-lg cursor-pointer" />
+          </div>
+
+          <!-- t / T -->
+          <div class="flex flex-col gap-1 col-span-2 sm:col-span-1">
+            <div class="flex items-center justify-between text-xs">
+              <span class="katex-label text-violet-300" data-tex="t / T"></span>
+              <span id="val-t" class="font-mono text-slate-200">1.00</span>
+            </div>
+            <input id="slider-t" type="range" min="0" max="1" step="0.01" value="1" class="w-full h-1.5 bg-slate-800 rounded-lg cursor-pointer" />
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right Column: Pure Symbolic Step-by-Step Derivation Cards -->
+    <aside class="lg:col-span-5 xl:col-span-4 flex flex-col gap-2 max-h-[calc(100vh-88px)] overflow-y-auto pr-1" id="steps-container"></aside>
+
+  </main>
+
+  <script>
+    const STEPS = [
+      {
+        id: 'I.1',
+        part: 1,
+        highlight: ['spheres-eq', 'seg-eq-a', 'seg-eq-b', 'excess-eq'],
+        lines: [
+          'V_A = V_B = U, \\quad P_A > M,\\; P_B > M',
+          'E_A = P_A - M = F_A D_A',
+          'E_B = P_B - M = F_B D_B'
+        ]
+      },
+      {
+        id: 'I.2',
+        part: 1,
+        highlight: ['spheres-eq', 'paths-eq', 'excess-eq'],
+        lines: [
+          'V_A = V_B = U \\implies S_A : S_B = E_A : E_B',
+          '(O_1 P_1) : (O_2 P_2) = (P_A - M) : (P_B - M)'
+        ]
+      },
+      {
+        id: 'II.1',
+        part: 2,
+        highlight: ['spheres-homo', 'seg-single', 'seg-mult'],
+        lines: [
+          'V_B = U \\implies W_B = P_B,\\; M_B = M \\implies E_B = P_B - M = FD',
+          'V_A = kU \\implies W_A = kP_B,\\; M_A = kM \\implies E_A = k(P_B - M) = F\'D\''
+        ]
+      },
+      {
+        id: 'II.2',
+        part: 2,
+        highlight: ['seg-single', 'seg-mult', 'euclid-ticks'],
+        lines: [
+          'C\'D\' = k \\cdot CD,\\quad C\'F\' = k \\cdot CF \\implies F\'D\' = k \\cdot FD',
+          'E_A : V_A = k(P_B - M) : kU = (P_B - M) : U = E_B : V_B',
+          'e_u = P_B - M'
+        ]
+      },
+      {
+        id: 'II.3',
+        part: 2,
+        highlight: ['spheres-homo', 'partition', 'paths-homo'],
+        lines: [
+          'A = \\bigsqcup_{i=1}^{k} B_i, \\quad V(B_i) = U,\\quad E(B_i) = P_B - M = E_B',
+          'S(B_i) = S_B = O_2 P_2 \\quad (t = T)'
+        ]
+      },
+      {
+        id: 'II.4',
+        part: 2,
+        highlight: ['spheres-homo', 'aristotle-q1', 'paths-homo'],
+        lines: [
+          '\\bigcup_{i=1}^{k} B_i = A \\implies e_u(A) = e_u(B_i) = P_B - M',
+          'O_1 Q_1 = k \\cdot O_2 P_2 \\quad (\\bot)'
+        ]
+      },
+      {
+        id: 'II.5',
+        part: 2,
+        highlight: ['spheres-homo', 'paths-homo', 'h1-line', 'aristotle-q1'],
+        lines: [
+          'S_A = O_1 P_1 = O_2 P_2 = S_B \\quad (t = T)',
+          'O_1 P_1,\\; O_2 P_2 \\in H_1 \\implies S_A : S_B = 1 : 1'
+        ]
+      }
+    ];
+
+    const state = {
+      step: 0,
+      k: 4,
+      PA: 11,
+      PB: 3,
+      M: 1.0,
+      t: 1.0,
+      playing: false,
+      lastTime: null
+    };
+
+    const canvas = document.getElementById('geomCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // Render static KaTeX slider labels
+    document.querySelectorAll('.katex-label').forEach(el => {
+      katex.render(el.dataset.tex, el, { throwOnError: false });
+    });
+
+    // Build derivation cards
+    const stepsContainer = document.getElementById('steps-container');
+    STEPS.forEach((s, idx) => {
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'step-card w-full text-left rounded-xl border border-slate-800 bg-[#0b101b] hover:border-slate-600 p-3 flex flex-col gap-2 cursor-pointer';
+      card.dataset.idx = idx;
+
+      const header = document.createElement('div');
+      header.className = 'flex items-center justify-between';
+      const badge = document.createElement('span');
+      badge.className = 'px-2 py-0.5 rounded text-[11px] font-mono font-semibold ' +
+        (s.part === 1 ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/30' : 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30');
+      badge.textContent = s.id;
+      header.appendChild(badge);
+
+      const dot = document.createElement('span');
+      dot.className = 'w-2 h-2 rounded-full bg-slate-700 step-dot';
+      header.appendChild(dot);
+
+      card.appendChild(header);
+
+      const body = document.createElement('div');
+      body.className = 'flex flex-col gap-1.5 overflow-x-auto';
+      s.lines.forEach(tex => {
+        const lineDiv = document.createElement('div');
+        lineDiv.className = 'text-slate-200';
+        katex.render(tex, lineDiv, { displayMode: false, throwOnError: false });
+        body.appendChild(lineDiv);
+      });
+      card.appendChild(body);
+
+      card.addEventListener('click', () => {
+        setStep(idx);
+      });
+
+      stepsContainer.appendChild(card);
+    });
+
+    function setStep(idx) {
+      state.step = Math.max(0, Math.min(STEPS.length - 1, idx));
+      updateUI();
+      draw();
+    }
+
+    function updateUI() {
+      const current = STEPS[state.step];
+      document.getElementById('step-indicator').textContent = `${state.step + 1} / ${STEPS.length}`;
+
+      // Highlight active card
+      document.querySelectorAll('.step-card').forEach((card, i) => {
+        const active = i === state.step;
+        card.classList.toggle('active', active);
+        const dot = card.querySelector('.step-dot');
+        dot.classList.toggle('bg-sky-400', active);
+        dot.classList.toggle('bg-slate-700', !active);
+        if (active) {
+          card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
+      });
+
+      // Enable/dim P_A slider depending on Part I vs Part II
+      const wrapPA = document.getElementById('wrap-pa');
+      const sliderPA = document.getElementById('slider-pa');
+      if (current.part === 1) {
+        wrapPA.classList.remove('opacity-35');
+        sliderPA.disabled = false;
+      } else {
+        wrapPA.classList.add('opacity-35');
+        sliderPA.disabled = true;
+      }
+
+      // Update live KaTeX readouts in header
+      const readouts = document.getElementById('live-readouts');
+      readouts.innerHTML = '';
+
+      const items = current.part === 1
+        ? [
+            { tex: `V_A = V_B = U`, cls: 'border-slate-700 text-slate-300' },
+            { tex: `P_A = ${state.PA}`, cls: 'border-sky-500/30 text-sky-300' },
+            { tex: `P_B = ${state.PB}`, cls: 'border-emerald-500/30 text-emerald-300' },
+            { tex: `M = ${state.M.toFixed(1)}`, cls: 'border-cyan-500/30 text-cyan-300' },
+            { tex: `E_A = ${(state.PA - state.M).toFixed(1)}`, cls: 'border-sky-500/30 text-sky-200' },
+            { tex: `E_B = ${(state.PB - state.M).toFixed(1)}`, cls: 'border-emerald-500/30 text-emerald-200' },
+            { tex: `S_A : S_B = ${(state.PA - state.M).toFixed(1)} : ${(state.PB - state.M).toFixed(1)}`, cls: 'border-violet-500/40 text-violet-200' }
+          ]
+        : [
+            { tex: `k = ${state.k}`, cls: 'border-amber-500/30 text-amber-300' },
+            { tex: `V_A = ${state.k}U,\\; V_B = U`, cls: 'border-slate-700 text-slate-300' },
+            { tex: `P_B = ${state.PB},\\; M = ${state.M.toFixed(1)}`, cls: 'border-cyan-500/30 text-cyan-300' },
+            { tex: `E_B = ${(state.PB - state.M).toFixed(1)}`, cls: 'border-emerald-500/30 text-emerald-300' },
+            { tex: `E_A = ${(state.k * (state.PB - state.M)).toFixed(1)}`, cls: 'border-amber-500/30 text-amber-200' },
+            { tex: `e_u = ${(state.PB - state.M).toFixed(1)}`, cls: 'border-emerald-500/40 text-emerald-200' },
+            { tex: `S_A : S_B = 1 : 1`, cls: 'border-sky-500/40 text-sky-200' }
+          ];
+
+      items.forEach(item => {
+        const chip = document.createElement('div');
+        chip.className = `px-2 py-1 rounded-md bg-slate-900/90 border ${item.cls}`;
+        katex.render(item.tex, chip, { throwOnError: false });
+        readouts.appendChild(chip);
+      });
+
+      const badge = document.getElementById('canvas-badge');
+      badge.textContent = current.part === 1
+        ? `${current.id} · V_A = V_B = U`
+        : `${current.id} · V_A = ${state.k}U, V_B = U`;
+    }
+
+    // Sliders & Buttons
+    document.getElementById('slider-k').addEventListener('input', e => {
+      state.k = parseInt(e.target.value, 10);
+      document.getElementById('val-k').textContent = state.k;
+      updateUI(); draw();
+    });
+    document.getElementById('slider-pa').addEventListener('input', e => {
+      state.PA = parseInt(e.target.value, 10);
+      document.getElementById('val-pa').textContent = state.PA;
+      updateUI(); draw();
+    });
+    document.getElementById('slider-pb').addEventListener('input', e => {
+      state.PB = parseInt(e.target.value, 10);
+      document.getElementById('val-pb').textContent = state.PB;
+      updateUI(); draw();
+    });
+    document.getElementById('slider-m').addEventListener('input', e => {
+      state.M = parseFloat(e.target.value);
+      document.getElementById('val-m').textContent = state.M.toFixed(1);
+      updateUI(); draw();
+    });
+    document.getElementById('slider-t').addEventListener('input', e => {
+      state.t = parseFloat(e.target.value);
+      document.getElementById('val-t').textContent = state.t.toFixed(2);
+      draw();
+    });
+
+    document.getElementById('btn-prev').addEventListener('click', () => setStep(state.step - 1));
+    document.getElementById('btn-next').addEventListener('click', () => setStep(state.step + 1));
+
+    document.getElementById('btn-reset').addEventListener('click', () => {
+      state.t = 0;
+      document.getElementById('slider-t').value = 0;
+      document.getElementById('val-t').textContent = '0.00';
+      draw();
+    });
+
+    const btnPlay = document.getElementById('btn-play');
+    btnPlay.addEventListener('click', () => {
+      state.playing = !state.playing;
+      if (state.playing && state.t >= 0.995) {
+        state.t = 0;
+      }
+      document.getElementById('play-icon').textContent = state.playing ? '⏸' : '▶';
+      document.getElementById('play-label').textContent = state.playing ? 'PAUSE' : 'PLAY';
+      if (state.playing) {
+        state.lastTime = performance.now();
+        requestAnimationFrame(tick);
+      }
+    });
+
+    function tick(now) {
+      if (!state.playing) return;
+      const dt = (now - state.lastTime) / 1000;
+      state.lastTime = now;
+      state.t += dt * 0.42;
+      if (state.t >= 1) {
+        state.t = 1;
+        state.playing = false;
+        document.getElementById('play-icon').textContent = '▶';
+        document.getElementById('play-label').textContent = 'PLAY';
+      }
+      document.getElementById('slider-t').value = state.t.toFixed(2);
+      document.getElementById('val-t').textContent = state.t.toFixed(2);
+      draw();
+      if (state.playing) requestAnimationFrame(tick);
+    }
+
+    // Canvas Drawing Helpers
+    function resizeCanvas() {
+      const rect = canvas.parentElement.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.max(1, Math.floor(rect.width * dpr));
+      canvas.height = Math.max(1, Math.floor(rect.height * dpr));
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      draw();
+    }
+    window.addEventListener('resize', resizeCanvas);
+
+    function drawPoint(x, y, label, color = '#e2e8f0', dx = 8, dy = -8, r = 3.5) {
+      ctx.save();
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#090d16';
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+
+      if (label) {
+        ctx.font = '600 12px ui-monospace, SFMono-Regular, Menlo, monospace';
+        ctx.fillStyle = color;
+        ctx.fillText(label, x + dx, y + dy);
+      }
+      ctx.restore();
+    }
+
+    function drawSphere(cx, cy, r, strokeColor, fillCore, fillEdge, label, glow = false) {
+      ctx.save();
+      if (glow) {
+        ctx.shadowColor = strokeColor;
+        ctx.shadowBlur = 16;
+      }
+      const grad = ctx.createRadialGradient(cx - r * 0.3, cy - r * 0.3, r * 0.1, cx, cy, r);
+      grad.addColorStop(0, fillCore);
+      grad.addColorStop(1, fillEdge);
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = strokeColor;
+      ctx.lineWidth = glow ? 2.2 : 1.5;
+      ctx.stroke();
+
+      if (label) {
+        ctx.font = '700 13px ui-serif, Georgia, serif';
+        ctx.fillStyle = '#f8fafc';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(label, cx, cy - r - 6);
+      }
+      ctx.restore();
+    }
+
+    function drawDashedLine(x1, y1, x2, y2, color, dash = [5, 4], width = 1.3) {
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.setLineDash(dash);
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function drawEuclideanBar(x, y, totalW, mFrac, colorM, colorE, labelLeft, labelMid, labelRight, ticks = 1, activeGlow = false) {
+      ctx.save();
+      const h = 14;
+      const wM = totalW * mFrac;
+      const wE = totalW * (1 - mFrac);
+
+      if (activeGlow) {
+        ctx.shadowColor = colorE;
+        ctx.shadowBlur = 12;
+      }
+
+      // Medium segment CF (M)
+      ctx.fillStyle = colorM;
+      ctx.globalAlpha = 0.28;
+      ctx.fillRect(x, y - h / 2, wM, h);
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = colorM;
+      ctx.lineWidth = 1.8;
+      ctx.strokeRect(x, y - h / 2, wM, h);
+
+      // Excess segment FD (E)
+      ctx.fillStyle = colorE;
+      ctx.globalAlpha = 0.28;
+      ctx.fillRect(x + wM, y - h / 2, wE, h);
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = colorE;
+      ctx.lineWidth = 1.8;
+      ctx.strokeRect(x + wM, y - h / 2, wE, h);
+
+      ctx.shadowBlur = 0;
+
+      // Euclidean compass arcs & ticks for k subdivisions
+      if (ticks > 1) {
+        const unitW = totalW / ticks;
+        const unitM = wM / ticks;
+        for (let i = 1; i < ticks; i++) {
+          // Tick inside C'F'
+          const txM = x + i * unitM;
+          ctx.strokeStyle = 'rgba(226,232,240,0.55)';
+          ctx.lineWidth = 1.1;
+          ctx.beginPath();
+          ctx.moveTo(txM, y - h / 2 - 3);
+          ctx.lineTo(txM, y + h / 2 + 3);
+          ctx.stroke();
+
+          // Tick inside F'D'
+          const txE = x + wM + i * (wE / ticks);
+          ctx.beginPath();
+          ctx.moveTo(txE, y - h / 2 - 3);
+          ctx.lineTo(txE, y + h / 2 + 3);
+          ctx.stroke();
+
+          // Subtle 1553 compass divider arc above F'D'
+          ctx.strokeStyle = 'rgba(251, 191, 36, 0.25)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          const segE = wE / ticks;
+          ctx.arc(x + wM + (i - 0.5) * segE, y - h / 2, segE * 0.5, Math.PI, 0, false);
+          ctx.stroke();
+        }
+      }
+
+      // Endpoint dots & labels
+      drawPoint(x, y, labelLeft, '#e2e8f0', -6, -13, 3.2);
+      drawPoint(x + wM, y, labelMid, '#38bdf8', -4, -13, 3.2);
+      drawPoint(x + totalW, y, labelRight, '#34d399', -4, -13, 3.2);
+
+      ctx.restore();
+    }
+
+    function draw() {
+      const w = canvas.clientWidth;
+      const h = canvas.clientHeight;
+      if (w <= 0 || h <= 0) return;
+
+      // Clear background #090d16
+      ctx.fillStyle = '#090d16';
+      ctx.fillRect(0, 0, w, h);
+
+      const stepObj = STEPS[state.step];
+      const hl = new Set(stepObj.highlight);
+      const isPart1 = stepObj.part === 1;
+
+      const splitX = Math.max(290, w * 0.54);
+
+      // Subtle vertical divider between Falling Body Space & Euclidean Magnitudes
+      ctx.save();
+      ctx.strokeStyle = 'rgba(148, 163, 184, 0.14)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(splitX, 18);
+      ctx.lineTo(splitX, h - 18);
+      ctx.stroke();
+      ctx.restore();
+
+      // ============================
+      // LEFT PANEL: FLUID & FALLING SPHERES
+      // ============================
+      const topH0 = 78;
+      const baseDrop = Math.min(h - topH0 - 70, 210);
+
+      // Fluid region below H0
+      const fluidGrad = ctx.createLinearGradient(0, topH0, 0, h);
+      fluidGrad.addColorStop(0, 'rgba(14, 116, 144, 0.14)');
+      fluidGrad.addColorStop(1, 'rgba(15, 23, 42, 0.35)');
+      ctx.fillStyle = fluidGrad;
+      ctx.fillRect(18, topH0, splitX - 36, h - topH0 - 18);
+
+      // Subtle horizontal fluid strata
+      ctx.save();
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.06)';
+      ctx.lineWidth = 1;
+      for (let gy = topH0 + 28; gy < h - 22; gy += 28) {
+        ctx.beginPath();
+        ctx.moveTo(22, gy);
+        ctx.lineTo(splitX - 22, gy);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // H0 line
+      ctx.save();
+      ctx.strokeStyle = '#64748b';
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(24, topH0);
+      ctx.lineTo(splitX - 24, topH0);
+      ctx.stroke();
+      ctx.font = '600 12px ui-monospace, monospace';
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillText('H₀', 28, topH0 - 7);
+      ctx.restore();
+
+      if (isPart1) {
+        // PART I: V_A = V_B = U, different densities P_A, P_B
+        const EA = Math.max(0.5, state.PA - state.M);
+        const EB = Math.max(0.5, state.PB - state.M);
+        const maxE = Math.max(EA, EB);
+
+        const maxDist = Math.min(h - topH0 - 65, 290);
+        const SA = (EA / maxE) * maxDist;
+        const SB = (EB / maxE) * maxDist;
+
+        const rU = Math.min(24, (splitX - 80) * 0.085);
+        const xA = splitX * 0.34;
+        const xB = splitX * 0.68;
+
+        const yA = topH0 + SA * state.t;
+        const yB = topH0 + SB * state.t;
+
+        // Horizontal target lines at P_1 and P_2
+        drawDashedLine(24, topH0 + SA, splitX - 24, topH0 + SA, 'rgba(56, 189, 248, 0.35)', [4, 4]);
+        drawDashedLine(24, topH0 + SB, splitX - 24, topH0 + SB, 'rgba(52, 211, 153, 0.35)', [4, 4]);
+
+        // Vertical trajectories
+        drawDashedLine(xA, topH0, xA, topH0 + SA, hl.has('paths-eq') ? '#38bdf8' : 'rgba(56, 189, 248, 0.45)', [3, 3], hl.has('paths-eq') ? 2 : 1.2);
+        drawDashedLine(xB, topH0, xB, topH0 + SB, hl.has('paths-eq') ? '#34d399' : 'rgba(52, 211, 153, 0.45)', [3, 3], hl.has('paths-eq') ? 2 : 1.2);
+
+        // Start & End markers
+        drawPoint(xA, topH0, 'O₁', '#94a3b8', 8, -8);
+        drawPoint(xB, topH0, 'O₂', '#94a3b8', 8, -8);
+        drawPoint(xA, topH0 + SA, 'P₁', '#38bdf8', 8, 4);
+        drawPoint(xB, topH0 + SB, 'P₂', '#34d399', 8, 4);
+
+        // Distance labels S_A, S_B
+        ctx.save();
+        ctx.font = '600 11px ui-monospace, monospace';
+        ctx.fillStyle = '#38bdf8';
+        ctx.fillText(`S_A`, xA - 28, topH0 + SA * 0.5);
+        ctx.fillStyle = '#34d399';
+        ctx.fillText(`S_B`, xB + 10, topH0 + SB * 0.5);
+        ctx.restore();
+
+        // Spheres A and B (equal radius rU)
+        drawSphere(xA, yA, rU, '#38bdf8', 'rgba(56,189,248,0.55)', 'rgba(14,116,144,0.22)', 'A (U)', hl.has('spheres-eq'));
+        drawSphere(xB, yB, rU, '#34d399', 'rgba(52,211,153,0.55)', 'rgba(6,95,70,0.22)', 'B (U)', hl.has('spheres-eq'));
+
+        drawPoint(xA, yA, '', '#f8fafc', 0, 0, 2.5);
+        drawPoint(xB, yB, '', '#f8fafc', 0, 0, 2.5);
+      } else {
+        // PART II: Homogeneous material P_B, V_A = k U, V_B = U
+        const rB = Math.min(20, (splitX - 90) * 0.065);
+        const rA = rB * Math.cbrt(state.k);
+
+        const maxAristotle = h - topH0 - 52;
+        const S_actual = Math.min(135, maxAristotle / state.k);
+        const S_aristotle = S_actual * state.k;
+
+        const xA = splitX * 0.34;
+        const xB = splitX * 0.72;
+
+        const yActual = topH0 + S_actual * state.t;
+        const yAristotle = topH0 + S_aristotle * state.t;
+
+        // H1 line (actual equal arrival line)
+        const h1Y = topH0 + S_actual;
+        ctx.save();
+        ctx.strokeStyle = hl.has('h1-line') || hl.has('paths-homo') ? '#34d399' : 'rgba(52, 211, 153, 0.45)';
+        ctx.lineWidth = hl.has('h1-line') ? 2.2 : 1.4;
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath();
+        ctx.moveTo(24, h1Y);
+        ctx.lineTo(splitX - 24, h1Y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.font = '600 12px ui-monospace, monospace';
+        ctx.fillStyle = '#34d399';
+        ctx.fillText('H₁', 28, h1Y - 6);
+        ctx.restore();
+
+        // Aristotelian ghost path & Q1 (if step highlights or in Part II)
+        const showQ1 = state.step >= 5;
+        if (showQ1) {
+          const q1Y = topH0 + S_aristotle;
+          drawDashedLine(xA, h1Y, xA, q1Y, hl.has('aristotle-q1') ? '#f43f5e' : 'rgba(244, 63, 94, 0.45)', [4, 4], hl.has('aristotle-q1') ? 2 : 1.2);
+          drawDashedLine(24, q1Y, xA + 36, q1Y, 'rgba(244, 63, 94, 0.3)', [3, 4]);
+
+          // Ghost Aristotelian circle at yAristotle
+          ctx.save();
+          ctx.strokeStyle = 'rgba(244, 63, 94, 0.65)';
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([4, 4]);
+          ctx.beginPath();
+          ctx.arc(xA, yAristotle, rA, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+
+          drawPoint(xA, q1Y, `Q₁ (⊥ k·S_B)`, '#fb7185', 10, 4, 3.5);
+
+          // Cross out Q1 gently
+          if (hl.has('aristotle-q1')) {
+            ctx.save();
+            ctx.strokeStyle = '#fb7185';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(xA - 7, q1Y - 7);
+            ctx.lineTo(xA + 7, q1Y + 7);
+            ctx.moveTo(xA + 7, q1Y - 7);
+            ctx.lineTo(xA - 7, q1Y + 7);
+            ctx.stroke();
+            ctx.restore();
+          }
+        }
+
+        // Actual vertical tracks O1 -> P1 and O2 -> P2
+        drawDashedLine(xA, topH0, xA, h1Y, hl.has('paths-homo') ? '#38bdf8' : 'rgba(56, 189, 248, 0.45)', [3, 3], hl.has('paths-homo') ? 2.2 : 1.3);
+        drawDashedLine(xB, topH0, xB, h1Y, hl.has('paths-homo') ? '#34d399' : 'rgba(52, 211, 153, 0.45)', [3, 3], hl.has('paths-homo') ? 2.2 : 1.3);
+
+        // Start & Arrival Points
+        drawPoint(xA, topH0, 'O₁', '#94a3b8', 8, -8);
+        drawPoint(xB, topH0, 'O₂', '#94a3b8', 8, -8);
+        drawPoint(xA, h1Y, 'P₁', '#38bdf8', 10, -6);
+        drawPoint(xB, h1Y, 'P₂', '#34d399', 10, -6);
+
+        // Labels S_A = S_B
+        ctx.save();
+        ctx.font = '600 11px ui-monospace, monospace';
+        ctx.fillStyle = '#38bdf8';
+        ctx.fillText(`S_A`, xA - 28, topH0 + S_actual * 0.55);
+        ctx.fillStyle = '#34d399';
+        ctx.fillText(`S_B`, xB + 10, topH0 + S_actual * 0.55);
+        ctx.restore();
+
+        // Partition Visualization in Step II.3 (state.step === 4) or subtle inner k-subdivisions
+        if (hl.has('partition')) {
+          // Draw k separated unit spheres B_1 ... B_k side-by-side around xA at yActual
+          const miniR = Math.min(rB * 0.62, 12);
+          const spacing = miniR * 2.55;
+          const startX = xA - ((state.k - 1) * spacing) / 2;
+
+          // Ghost outline of A
+          ctx.save();
+          ctx.strokeStyle = 'rgba(251, 191, 36, 0.35)';
+          ctx.setLineDash([4, 3]);
+          ctx.lineWidth = 1.3;
+          ctx.beginPath();
+          ctx.arc(xA, yActual, rA, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+
+          for (let i = 0; i < state.k; i++) {
+            const bx = startX + i * spacing;
+            drawSphere(bx, yActual, miniR, '#fbbf24', 'rgba(251,191,36,0.55)', 'rgba(180,83,9,0.25)', `B${i + 1}`, true);
+          }
+        } else {
+          // Draw unified Sphere A with subtle k-unit indicator
+          drawSphere(xA, yActual, rA, '#fbbf24', 'rgba(251,191,36,0.45)', 'rgba(180,83,9,0.18)', `A (${state.k}U)`, hl.has('spheres-homo'));
+          drawPoint(xA, yActual, '', '#f8fafc', 0, 0, 2.5);
+        }
+
+        // Draw Sphere B
+        drawSphere(xB, yActual, rB, '#34d399', 'rgba(52,211,153,0.55)', 'rgba(6,95,70,0.22)', 'B (U)', hl.has('spheres-homo'));
+        drawPoint(xB, yActual, '', '#f8fafc', 0, 0, 2.5);
+      }
+
+      // ============================
+      // RIGHT PANEL: EUCLID BOOK V LINE SEGMENTS
+      // ============================
+      const rx = splitX + 34;
+      const rw = Math.max(120, w - rx - 34);
+
+      ctx.save();
+      ctx.font = '600 12px ui-monospace, monospace';
+      ctx.fillStyle = '#94a3b8';
+      ctx.fillText('EUCLIDES V · MAGNITUDINES', rx, 34);
+      ctx.restore();
+
+      if (isPart1) {
+        const maxP = Math.max(state.PA, state.PB, 1);
+        const wA = rw * (state.PA / maxP);
+        const wB = rw * (state.PB / maxP);
+
+        const yBarA = h * 0.30;
+        const yBarB = h * 0.54;
+
+        // Bar A: C_A — F_A — D_A
+        drawEuclideanBar(rx, yBarA, wA, state.M / state.PA, '#22d3ee', '#38bdf8', 'C_A', 'F_A', 'D_A', 1, hl.has('seg-eq-a') || hl.has('excess-eq'));
+        ctx.save();
+        ctx.font = '600 11px ui-monospace, monospace';
+        ctx.fillStyle = '#22d3ee';
+        ctx.fillText(`M=${state.M.toFixed(1)}`, rx + 2, yBarA + 22);
+        ctx.fillStyle = '#38bdf8';
+        ctx.fillText(`E_A=${(state.PA - state.M).toFixed(1)}`, rx + wA * (state.M / state.PA) + 4, yBarA + 22);
+        ctx.restore();
+
+        // Bar B: C_B — F_B — D_B
+        drawEuclideanBar(rx, yBarB, wB, state.M / state.PB, '#22d3ee', '#34d399', 'C_B', 'F_B', 'D_B', 1, hl.has('seg-eq-b') || hl.has('excess-eq'));
+        ctx.save();
+        ctx.font = '600 11px ui-monospace, monospace';
+        ctx.fillStyle = '#22d3ee';
+        ctx.fillText(`M=${state.M.toFixed(1)}`, rx + 2, yBarB + 22);
+        ctx.fillStyle = '#34d399';
+        ctx.fillText(`E_B=${(state.PB - state.M).toFixed(1)}`, rx + wB * (state.M / state.PB) + 4, yBarB + 22);
+        ctx.restore();
+
+        // Ratio summary box
+        const boxY = h * 0.74;
+        ctx.save();
+        ctx.strokeStyle = 'rgba(139, 92, 246, 0.35)';
+        ctx.fillStyle = 'rgba(139, 92, 246, 0.08)';
+        ctx.beginPath();
+        ctx.roundRect(rx, boxY, rw, 54, 8);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.font = '600 12px ui-monospace, monospace';
+        ctx.fillStyle = '#c4b5fd';
+        const ea = (state.PA - state.M).toFixed(1);
+        const eb = (state.PB - state.M).toFixed(1);
+        const ratio = ( (state.PA - state.M) / (state.PB - state.M) ).toFixed(2);
+        ctx.fillText(`F_A D_A : F_B D_B = ${ea} : ${eb}`, rx + 12, boxY + 22);
+        ctx.fillStyle = '#e2e8f0';
+        ctx.fillText(`S_A : S_B = ${ratio} : 1`, rx + 12, boxY + 42);
+        ctx.restore();
+      } else {
+        // PART II: CD (unit U) and C'D' = k * CD
+        const wSingle = rw / state.k;
+        const wMult = rw;
+
+        const ySingle = h * 0.28;
+        const yMult = h * 0.54;
+
+        const mFrac = state.M / state.PB;
+
+        // Single unit segment C — F — D
+        drawEuclideanBar(rx, ySingle, wSingle, mFrac, '#22d3ee', '#34d399', 'C', 'F', 'D', 1, hl.has('seg-single'));
+
+        // Multiple segment C' — F' — D' with k subdivisions
+        drawEuclideanBar(rx, yMult, wMult, mFrac, '#22d3ee', '#fbbf24', "C'", "F'", "D'", state.k, hl.has('seg-mult') || hl.has('euclid-ticks'));
+
+        // Vertical projection lines from C, F, D down to first unit of C'D'
+        drawDashedLine(rx, ySingle + 10, rx, yMult - 10, 'rgba(148, 163, 184, 0.3)', [3, 3]);
+        drawDashedLine(rx + wSingle * mFrac, ySingle + 10, rx + wMult * mFrac, yMult - 10, 'rgba(34, 211, 238, 0.35)', [3, 3]);
+        drawDashedLine(rx + wSingle, ySingle + 10, rx + wMult, yMult - 10, 'rgba(251, 191, 36, 0.35)', [3, 3]);
+
+        // Value annotations
+        ctx.save();
+        ctx.font = '600 11px ui-monospace, monospace';
+        ctx.fillStyle = '#22d3ee';
+        ctx.fillText(`CF=M=${state.M.toFixed(1)}`, rx, ySingle + 24);
+        ctx.fillStyle = '#34d399';
+        ctx.fillText(`FD=E_B=${(state.PB - state.M).toFixed(1)}`, rx + Math.max(wSingle * mFrac, 78), ySingle + 24);
+
+        ctx.fillStyle = '#22d3ee';
+        ctx.fillText(`C'F'=${state.k}M=${(state.k * state.M).toFixed(1)}`, rx, yMult + 24);
+        ctx.fillStyle = '#fbbf24';
+        ctx.fillText(`F'D'=${state.k}·FD=${(state.k * (state.PB - state.M)).toFixed(1)}`, rx + wMult * mFrac + 4, yMult + 24);
+        ctx.restore();
+
+        // Book V Invariant Box
+        const boxY = h * 0.74;
+        ctx.save();
+        ctx.strokeStyle = 'rgba(52, 211, 153, 0.4)';
+        ctx.fillStyle = 'rgba(16, 185, 129, 0.08)';
+        ctx.beginPath();
+        ctx.roundRect(rx, boxY, rw, 54, 8);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.font = '600 12px ui-monospace, monospace';
+        const eu = (state.PB - state.M).toFixed(1);
+        ctx.fillStyle = '#6ee7b7';
+        ctx.fillText(`E_A : V_A = F'D' : ${state.k}U = ${eu} : U`, rx + 12, boxY + 22);
+        ctx.fillStyle = '#38bdf8';
+        ctx.fillText(`e_u = ${eu}  ⇒  S_A = S_B`, rx + 12, boxY + 42);
+        ctx.restore();
+      }
+    }
+
+    // Initialize
+    updateUI();
+    resizeCanvas();
+  </script>
+</body>
+</html>
