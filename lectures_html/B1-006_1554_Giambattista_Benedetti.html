@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Benedetti 1554: Demonstratio Proportionum Motuum Localium</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    <style>
+        body { background-color: #090d16; color: #e2e8f0; overflow: hidden; font-family: 'serif'; }
+        canvas { border: 1px solid #1e293b; background: radial-gradient(circle at center, #0f172a 0%, #090d16 100%); cursor: crosshair; }
+        .step-card { transition: all 0.3s ease; border-left: 4px solid transparent; }
+        .step-card.active { border-left-color: #38bdf8; background-color: #1e293b; transform: translateX(10px); }
+        input[type=range] { accent-color: #38bdf8; }
+        .math-glow { text-shadow: 0 0 10px rgba(56, 189, 248, 0.5); }
+    </style>
+</head>
+<body class="h-screen flex flex-col">
+
+    <!-- Header: Live Parameters -->
+    <div class="h-20 border-b border-slate-800 flex items-center justify-around px-8 bg-[#090d16]">
+        <div id="param-p" class="math-glow text-xl"></div>
+        <div id="param-m" class="math-glow text-xl"></div>
+        <div id="param-v" class="math-glow text-xl"></div>
+        <div id="param-s" class="math-glow text-xl text-sky-400"></div>
+    </div>
+
+    <div class="flex-1 flex overflow-hidden">
+        <!-- Left: Canvas -->
+        <div class="flex-1 relative p-4 flex flex-col">
+            <canvas id="simCanvas" class="w-full flex-1 rounded-lg shadow-2xl"></canvas>
+            
+            <!-- Controls Overlay -->
+            <div class="absolute bottom-8 left-1/2 -translate-x-1/2 flex gap-6 bg-slate-900/80 p-4 rounded-full border border-slate-700 backdrop-blur-md">
+                <button id="prevBtn" class="px-4 py-2 hover:bg-slate-700 rounded-full transition">⏮</button>
+                <button id="playBtn" class="px-6 py-2 bg-sky-600 hover:bg-sky-500 rounded-full transition font-bold">PLAY</button>
+                <button id="nextBtn" class="px-4 py-2 hover:bg-slate-700 rounded-full transition">⏭</button>
+                <div class="h-8 w-px bg-slate-700 mx-2"></div>
+                <div class="flex flex-col text-xs">
+                    <label>Specific Gravity (P)</label>
+                    <input type="range" id="sliderP" min="1" max="20" value="10" class="w-32">
+                </div>
+                <div class="flex flex-col text-xs">
+                    <label>Medium Density (M)</label>
+                    <input type="range" id="sliderM" min="0" max="9" value="2" class="w-32">
+                </div>
+            </div>
+        </div>
+
+        <!-- Right: Derivation Steps -->
+        <div class="w-[450px] border-l border-slate-800 overflow-y-auto p-6 space-y-4 bg-[#0b121f]">
+            <div id="step0" class="step-card p-4 rounded bg-slate-900/50 cursor-pointer" onclick="setStep(0)">
+                <div id="math0"></div>
+            </div>
+            <div id="step1" class="step-card p-4 rounded bg-slate-900/50 cursor-pointer" onclick="setStep(1)">
+                <div id="math1"></div>
+            </div>
+            <div id="step2" class="step-card p-4 rounded bg-slate-900/50 cursor-pointer" onclick="setStep(2)">
+                <div id="math2"></div>
+            </div>
+            <div id="step3" class="step-card p-4 rounded bg-slate-900/50 cursor-pointer" onclick="setStep(3)">
+                <div id="math3"></div>
+            </div>
+            <div id="step4" class="step-card p-4 rounded bg-slate-900/50 cursor-pointer" onclick="setStep(4)">
+                <div id="math4"></div>
+            </div>
+            <div id="step5" class="step-card p-4 rounded bg-slate-900/50 cursor-pointer" onclick="setStep(5)">
+                <div id="math5"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('simCanvas');
+        const ctx = canvas.getContext('2d');
+        const playBtn = document.getElementById('playBtn');
+        const prevBtn = document.getElementById('prevBtn');
+        const nextBtn = document.getElementById('nextBtn');
+        const sliderP = document.getElementById('sliderP');
+        const sliderM = document.getElementById('sliderM');
+
+        let step = 0;
+        let isPlaying = false;
+        let time = 0;
+        let bodies = [];
+
+        const params = {
+            P: 10, // Specific Gravity of Object
+            M: 2,  // Specific Gravity of Medium
+            V: 1,  // Volume
+            g: 0.1 // Gravity constant for sim
+        };
+
+        const stepsMath = [
+            `\\text{Axiom: } O_1, O_2 \\in \\text{Materia}`,
+            `\\text{Aristotle: } S \\propto W \\implies S \\propto (V \\cdot P)`,
+            `\\text{Benedetti: } S_1 = S_2 \\text{ if } P_1 = P_2`,
+            `\\text{Union: } O_1 + T + O_2 \\implies W_{total} = 2W`,
+            `\\text{Contradiction: } 2W \\not\\implies 2S \\text{ (No mechanical pull)}`,
+            `\\text{Conclusion: } S \\propto (P - M)`
+        ];
+
+        function initMath() {
+            stepsMath.forEach((m, i) => {
+                const el = document.getElementById(`math${i}`);
+                katex.render(m, el, { throwOnError: false });
+            });
+            updateParamDisplay();
+        }
+
+        function updateParamDisplay() {
+            katex.render(`P = ${params.P}`, document.getElementById('param-p'));
+            katex.render(`M = ${params.M}`, document.getElementById('param-m'));
+            katex.render(`V = ${params.V}`, document.getElementById('param-v'));
+            const sVal = Math.max(0, params.P - params.M).toFixed(1);
+            katex.render(`S \\propto ${sVal}`, document.getElementById('param-s'));
+        }
+
+        function setStep(s) {
+            step = s;
+            time = 0;
+            document.querySelectorAll('.step-card').forEach((c, i) => {
+                c.classList.toggle('active', i === s);
+            });
+        }
+
+        function drawVector(x, y, dy, color, label) {
+            ctx.beginPath();
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.moveTo(x, y);
+            ctx.lineTo(x, y + dy);
+            ctx.stroke();
+            // Arrowhead
+            const head = 5 * (dy > 0 ? 1 : -1);
+            ctx.beginPath();
+            ctx.moveTo(x - 5, y + dy - head);
+            ctx.lineTo(x, y + dy);
+            ctx.lineTo(x + 5, y + dy - head);
+            ctx.stroke();
+            
+            ctx.fillStyle = color;
+            ctx.font = "14px serif";
+            ctx.fillText(label, x + 10, y + dy/2);
+        }
+
+        function draw() {
+            canvas.width = canvas.clientWidth;
+            canvas.height = canvas.clientHeight;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const centerX = canvas.width / 2;
+            const startY = 100;
+            const speed = (params.P - params.M) * params.g;
+            const aristotleSpeed = (params.P * 2) * params.g * 0.5; // Scaled for visual comparison
+
+            // Draw Medium
+            ctx.fillStyle = `rgba(56, 189, 248, ${params.M / 20})`;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            if (isPlaying) time += 1;
+
+            ctx.setLineDash([]);
+            
+            switch(step) {
+                case 0: // Axiom
+                    drawBody(centerX, startY, "O_1", "#f8fafc");
+                    break;
+                case 1: // Aristotle
+                    drawBody(centerX - 100, startY + (isPlaying ? aristotleSpeed * time : 0), "O_1", "#f8fafc");
+                    drawVector(centerX - 100, startY + (isPlaying ? aristotleSpeed * time : 0), 50, "#fbbf24", "W");
+                    break;
+                case 2: // Benedetti
+                    drawBody(centerX - 100, startY + (isPlaying ? speed * time : 0), "O_1", "#f8fafc");
+                    drawBody(centerX + 100, startY + (isPlaying ? speed * time : 0), "O_2", "#f8fafc");
+                    break;
+                case 3: // Union
+                    const yPos = startY + (isPlaying ? speed * time : 0);
+                    drawBody(centerX - 40, yPos, "O_1", "#f8fafc");
+                    drawBody(centerX + 40, yPos, "O_2", "#f8fafc");
+                    ctx.beginPath();
+                    ctx.strokeStyle = "#94a3b8";
+                    ctx.moveTo(centerX - 20, yPos);
+                    ctx.lineTo(centerX + 20, yPos);
+                    ctx.stroke();
+                    ctx.fillStyle = "#94a3b8";
+                    ctx.fillText("T", centerX - 5, yPos - 10);
+                    break;
+                case 4: // Contradiction
+                    const yActual = startY + (isPlaying ? speed * time : 0);
+                    const yAris = startY + (isPlaying ? speed * 2 * time : 0);
+                    
+                    // Aristotle's Ghost
+                    ctx.globalAlpha = 0.3;
+                    drawBody(centerX + 100, yAris, "2S?", "#ef4444");
+                    ctx.globalAlpha = 1.0;
+                    
+                    // Benedetti's Reality
+                    drawBody(centerX - 100, yActual, "S", "#38bdf8");
+                    ctx.beginPath();
+                    ctx.strokeStyle = "#38bdf8";
+                    ctx.moveTo(centerX - 120, yActual);
+                    ctx.lineTo(centerX - 80, yActual);
+                    ctx.stroke();
+                    break;
+                case 5: // Conclusion
+                    const yFinal = startY + (isPlaying ? speed * time : 0);
+                    drawBody(centerX, yFinal, "P", "#38bdf8");
+                    drawVector(centerX, yFinal, 60, "#fbbf24", "P (Weight)");
+                    drawVector(centerX, yFinal, -params.M * 10, "#ef4444", "M (Resistance)");
+                    break;
+            }
+
+            requestAnimationFrame(draw);
+        }
+
+        function drawBody(x, y, label, color) {
+            ctx.beginPath();
+            ctx.arc(x, y, 20, 0, Math.PI * 2);
+            ctx.fillStyle = "#1e293b";
+            ctx.fill();
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 3;
+            ctx.stroke();
+            ctx.fillStyle = color;
+            ctx.textAlign = "center";
+            ctx.font = "bold 16px serif";
+            ctx.fillText(label, x, y + 6);
+        }
+
+        // Event Listeners
+        playBtn.onclick = () => {
+            isPlaying = !isPlaying;
+            playBtn.innerText = isPlaying ? "PAUSE" : "PLAY";
+            playBtn.classList.toggle('bg-sky-600');
+            playBtn.classList.toggle('bg-amber-600');
+        };
+
+        nextBtn.onclick = () => { if(step < 5) setStep(step + 1); };
+        prevBtn.onclick = () => { if(step > 0) setStep(step - 1); };
+
+        sliderP.oninput = (e) => { params.P = parseInt(e.target.value); updateParamDisplay(); };
+        sliderM.oninput = (e) => { params.M = parseInt(e.target.value); updateParamDisplay(); };
+
+        // Init
+        window.onload = () => {
+            initMath();
+            setStep(0);
+            draw();
+        };
+    </script>
+</body>
+</html>
