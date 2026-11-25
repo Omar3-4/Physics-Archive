@@ -2,8 +2,8 @@ name: Daily Foundational Physics Lecture
 
 on:
   schedule:
-    # 6:00 صباحاً بتوقيت القاهرة (UTC+2) يوافق 04:00 UTC (يبدأ قبلها بدقيقتين للتجهيز)
-    - cron: '58 3 * * *'
+    # 6:00 صباحاً بتوقيت مصر (UTC+2) يوافق 04:00 UTC
+    - cron: '0 4 * * *'
   workflow_dispatch:
 
 permissions:
