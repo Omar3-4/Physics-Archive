@@ -20,6 +20,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+          cache: 'pip'
 
       - name: Check Python Syntax First
         run: python -m py_compile generate_lecture.py
@@ -27,10 +28,21 @@ jobs:
       - name: Install Python dependencies
         run: pip install pandas requests matplotlib
 
+      - name: Cache APT packages (Pandoc, XeLaTeX, Fonts)
+        id: apt-cache
+        uses: actions/cache@v4
+        with:
+          path: /var/cache/apt/archives
+          key: ${{ runner.os }}-apt-texlive-v1
+
       - name: Install Pandoc, XeLaTeX, and Amiri Arabic Font
         run: |
-          sudo apt-get update
-          sudo apt-get install -y pandoc texlive-xetex texlive-lang-arabic fonts-hosny-amiri
+          if [ "${{ steps.apt-cache.outputs.cache-hit }}" != "true" ]; then
+            sudo apt-get update
+            sudo apt-get install -y --download-only pandoc texlive-xetex texlive-lang-arabic fonts-hosny-amiri
+          fi
+          sudo dpkg -i -E --force-depends /var/cache/apt/archives/*.deb || true
+          sudo apt-get install -fy
 
       - name: Run Lecture Generator & Send Email
         env:
