@@ -28,24 +28,27 @@ def get_next_paper(df):
     return None, None
 
 
-def call_gemini(prompt):
+def call_gemini(prompt, max_tokens=32768, temperature=0.25):
     models = ["gemini-4-hydrogen", "gemini-3.8-flash", "gemini-3-flash-preview", "gemini-3.5-flash-lite"]
     for model in models:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={GEMINI_API_KEY}"
         payload = {
             "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {"temperature": 0.25, "maxOutputTokens": 32768}
+            "generationConfig": {"temperature": temperature, "maxOutputTokens": max_tokens}
         }
-        res = requests.post(url, json=payload, timeout=240)
-        if res.status_code == 200:
-            data = res.json()
-            parts = data.get("candidates", [{}])[0].get("content", {}).get("parts", [])
-            text = "\n".join(p["text"] for p in parts if "text" in p and not p.get("thought", False)).strip()
-            if len(text) > 100:
-                print(f"Generated via {model} ({len(text)} chars)")
-                return text
-        else:
-            print(f"WARNING {model} failed with HTTP {res.status_code}")
+        try:
+            res = requests.post(url, json=payload, timeout=240)
+            if res.status_code == 200:
+                data = res.json()
+                parts = data.get("candidates", [{}])[0].get("content", {}).get("parts", [])
+                text = "\n".join(p["text"] for p in parts if "text" in p and not p.get("thought", False)).strip()
+                if len(text) > 50:
+                    print(f"Generated via {model} ({len(text)} chars)")
+                    return text
+            else:
+                print(f"WARNING {model} failed with HTTP {res.status_code}")
+        except Exception as e:
+            print(f"WARNING {model} request exception: {e}")
     raise RuntimeError("All Gemini models failed.")
 
 
@@ -59,7 +62,6 @@ def process_multiple_diagrams(raw_text, base_name):
     generated_figs = {}
 
     for fig_id, code in fig_blocks:
-        # إزالة كود البايثون من النص مع الإبقاء على علامة [[FIG_X]] في مكانها وسط الفقرات
         pattern = re.compile(r'\[\[' + re.escape(fig_id) + r'\]\]\s*```python\s*' + re.escape(code) + r'```')
         clean_text = pattern.sub(f"\n\n[[{fig_id}]]\n\n", clean_text, count=1)
 
@@ -95,7 +97,6 @@ def process_multiple_diagrams(raw_text, base_name):
         except subprocess.TimeoutExpired:
             print(f"WARNING {fig_id} skipped: timeout.")
 
-    # تنظيف أي كود بايثون متبقٍ
     clean_text = re.sub(r'```python[\s\S]*?```', '', clean_text).strip()
     return clean_text, generated_figs
 
@@ -107,11 +108,14 @@ def sanitize_markdown_for_xelatex(text):
     text = re.sub(r'([^\n])\n\$\$', r'\1\n\n$$', text)
     text = re.sub(r'\$\$\n([^\n])', r'$$\n\n\1', text)
 
-    # 2. إزالة أي أوامر \textenglish مكسورة قد يكتبها النموذج تلقائياً
+    # 2. إزالة أي أوامر \textenglish سابقة لتجنب التكرار
     text = re.sub(r'\\textenglish\{([^}]*)\}', r'\1', text)
 
-    # 3. حماية النصوص خارج المعادلات وحماية علامات [[FIG_X]]
-    parts = re.split(r'(\$\$[\s\S]*?\$\$|\$[^\$\n]+?\$|\[\[FIG_\d+\]\])', text)
+    # 3. اختصار عنوان المحور ليكون "البرهان" فقط
+    text = re.sub(r'###\s*البرهان خطوة بخطوة بأدوات عصر المؤلف', r'### البرهان', text)
+
+    # 4. تقسيم النص مع حماية الرياضيات والرسومات والصور
+    parts = re.split(r'(\$\$[\s\S]*?\$\$|\$[^\$\n]+?\$|!\[[^\]]*\]\([^)]+\)|\[\[FIG_\d+\]\])', text)
 
     cmd_list = [
         "sin", "cos", "tan", "cot", "sec", "csc", "arcsin", "arccos", "arctan",
@@ -131,12 +135,16 @@ def sanitize_markdown_for_xelatex(text):
         r'(?:' + brace_arg + r'|\^' + brace_arg + r'|_' + brace_arg + r'|\^[a-zA-Z0-9]|_[a-zA-Z0-9])*)'
     )
 
+    # حماية الأقواس باللغة الإنجليزية في النص العربي لمنع انعكاسها
+    ascii_parens = re.compile(r'\(([\x20-\x7E]+)\)')
+
     for i in range(len(parts)):
         part = parts[i]
-        if part.startswith("$") or part.startswith("[[FIG_"):
+        if part.startswith("$") or part.startswith("[[FIG_") or part.startswith("!["):
             continue
         part = math_cmds.sub(r'$\1$', part)
         part = re.sub(r'(?<!\\)_', r'\\_', part)
+        part = ascii_parens.sub(r'\\textenglish{(\1)}', part)
         parts[i] = part
 
     return "".join(parts)
@@ -145,29 +153,31 @@ def sanitize_markdown_for_xelatex(text):
 def generate_interactive_html(paper_id, date, scientist, title, lecture_body):
     html_prompt = f"""
 You are an expert computational physicist and scientific visualization engineer.
-Based on the historical physics lecture below for:
+Build a **single-file, self-contained, interactive HTML5 Canvas demonstration** for this historical physics paper:
 - Paper: {title} ({date}) by {scientist}
 
-Build a **single-file, self-contained, interactive HTML5 Canvas demonstration** that visually animates and demonstrates the exact mathematical/geometric derivation step-by-step using ONLY period-accurate tools from {date}.
+**CRITICAL REQUIREMENTS:**
+1. Return a complete, valid, single HTML file starting with `<!DOCTYPE html>` and ending with `</html>`. Do NOT wrap in markdown fences.
+2. **KaTeX & Auto-Render:** Include KaTeX CSS & JS and auto-render extension from CDN. Render math equations accurately in both canvas parameter readouts and the step-by-step panel.
+3. **Interactive Visual Demonstration:**
+   - Left side: HTML5 `<canvas>` (#090d16 dark background) showing animated, interactive geometry with sliders and Play/Pause.
+   - Right side: Step-by-step proof cards with concise Arabic explanations for each geometric step.
+4. Keep the HTML self-contained, responsive, and working smoothly.
 
-**CRITICAL TECHNICAL & DESIGN RULES:**
-1. **KaTeX Auto-Render Mandatory:** Include KaTeX CSS, JS, and the `auto-render` extension (`https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js`). Call `renderMathInElement(document.body, {{ delimiters: [{{left: '$$', right: '$$', display: true}}, {{left: '$', right: '$', display: false}}] }});` on page load AND whenever dynamic DOM elements are updated so NO raw `$` signs EVER appear on screen!
-2. **Clear Visual Geometry + Concise Arabic Intuition:**
-   - Left/Main panel: Dark-mode HTML5 `<canvas>` (`#090d16`) drawing the exact geometric construction with clear labels, colored vectors/angles, dashed auxiliary lines, and interactive sliders (angles, lengths, time) + Play/Pause & Step buttons.
-   - Right panel: Step-by-step derivation cards. Each card must show the symbolic equation (rendered via KaTeX) accompanied by a **single short, crystal-clear Arabic sentence** explaining what happens geometrically in that step (so a reader weak in geometry immediately sees why the step works). Clicking a step highlights the exact lines/angles/triangles on the canvas.
-3. **Historical Fidelity:** Use ONLY the exact symbols and geometric methods from {date}.
-4. **Output Format:** Return ONLY valid HTML starting with `<!DOCTYPE html>` and ending with `</html>`. No markdown fences.
-
-**LECTURE CONTENT:**
-{lecture_body[:16000]}
+LECTURE CONTENT SUMMARY:
+{lecture_body[:10000]}
 """
     try:
-        raw_html = call_gemini(html_prompt)
+        raw_html = call_gemini(html_prompt, max_tokens=16384, temperature=0.2)
         match = re.search(r'(<!DOCTYPE html[\s\S]*?</html>)', raw_html, re.IGNORECASE)
         if match:
-            return match.group(1)
+            return match.group(1).strip()
         if "<html" in raw_html.lower():
-            return raw_html
+            start_idx = raw_html.lower().find("<html")
+            end_idx = raw_html.lower().rfind("</html>")
+            if start_idx != -1 and end_idx != -1:
+                return "<!DOCTYPE html>\n" + raw_html[start_idx:end_idx + 7].strip()
+            return raw_html.strip()
     except Exception as e:
         print(f"WARNING HTML generation failed: {e}")
     return None
@@ -189,49 +199,50 @@ def main():
     bridge = paper["Causal Bridge (Before -> After)"]
     link = paper["Primary Archival Link / Reference"]
 
+    # فصل العنوان الأصلي عن الترجمة الإنجليزية إذا وُجدت بين قوسين
+    title_match = re.search(r'\(([^)]+)\)', title)
+    if title_match:
+        english_title = title_match.group(1).strip()
+        latin_title = title[:title_match.start()].strip()
+    else:
+        english_title = title
+        latin_title = title
+
     prompt = f"""
-أنت أستاذ فيزياء ومؤرخ علوم تشرح الأوراق العلمية التأسيسية بأسلوب أكاديمي سلس وواضح ومباشر، لطالب فيزياء يريد أن يعيش في عصر المؤلف ويفهم كل خطوة بعمق وبساطة دون تعقيد لغوي.
+أنت أستاذ فيزياء ومؤرخ علوم تشرح الأوراق العلمية التأسيسية بأسلوب أكاديمي سلس ومباشر، لطالب فيزياء يريد فهم خطوات البرهان بعمق وبساطة دون تعقيد لغوي.
 
 بيانات العمل العلمي:
 - الرمز الأرشيفي: {paper_id}
 - التاريخ: {date}
 - العالم: {scientist}
-- العنوان: {title}
+- العنوان الأصلي: {latin_title}
+- الترجمة الإنجليزية للعنوان: {english_title}
 - جهة النشر: {venue}
 - الإسهام المحدد: {puzzle}
 - الرابط السببي: {bridge}
 - الرابط الأرشيفي: {link}
 
-**قواعد صارمة جداً للأسلوب والمحتوى (إلزامية):**
-1. **لغة عربية واضحة ومباشرة:**
-   - اكتب بلغة عربية علمية طبيعية ومباشرة تشرح الفكرة الفيزيائية بوضوح تام دون تقعر لفظي أو كلمات مهجورة.
-   - لا تستخدم أي رموز تعبيرية (emoji) نهائياً.
-   - لا تكتب مقدمات ترحيبية أو عبارات مبالغة وصفية، وابدأ العرض مباشرة.
-   - لا تكتب اقتباسات باللغات الأجنبية دون ترجمة. اكتب المصطلح الإنجليزي الأساسي بين قوسين عاديين عند الحاجة فقط دون أوامر معقدة.
-2. **تعريف كل رمز في سياقه الطبيعي:**
-   - لا تضع جدولاً أو قائمة منفصلة للرموز في البداية.
-   - كلما ظهر رمز رياضي أو هندسي لأول مرة في المعادلة أو البرهان، عرّفه فوراً داخل نفس الجملة بسلاسة ووضوح.
-3. **التقيد الحرفي بأدوات عصر المؤلف ({date}):**
-   - اشرح البرهان بنفس الأدوات الرياضية والهندسية التي استخدمها المؤلف في عصره فقط (مثل الهندسة الإقليدية، تشابه المثلثات، النسب، الأوتار)، ويُمنع استخدام أي أداة رياضية لم تكن قد اختُرعت بعد في تاريخ {date}.
-4. **رسومات توضيحية متعددة وكل رسمة في سياقها داخل النص:**
-   - صمّم رسمتين أو ثلاث رسمات هندسية/فيزيائية مختلفة توضح مراحل الفكرة (مثلاً: الرسمة الأولى للنموذج القديم مقابل الجديد أو المشكلة الفيزيائية، والرسمة الثانية للبناء الهندسي للبرهان، والرسمة الثالثة للتطبيق أو مقارنة النتائج).
-   - ضع كل رسمة في موضعها الطبيعي داخل الفقرة التي تشرحها باستخدام العلامة `[[FIG_1]]` متبوعة مباشرة ببلوك كود بايثون ` ```python ... ``` ` يرسمها، ثم `[[FIG_2]]` متبوعة بكودها في موضعها المناسب، وهكذا.
-   - تأكد في كل كود بايثون أن النصوص والتسميات داخل الرسمة بالإنجليزية فقط (`O, M, L, theta`)، وأن الخطوط واضحة ومقروءة، وتُحفظ بـ `plt.savefig('fig.png')`.
+**قواعد الأسلوب والمحتوى:**
+1. اكتب بلغة عربية علمية طبيعية ومباشرة تشرح الفكرة الفيزيائية بوضوح دون تقعر أو كلمات مهجورة.
+2. لا تستخدم أي رموز تعبيرية (emoji).
+3. لا تضع جدولاً منفصلاً للرموز؛ عرّف كل رمز فور ظهوره بسلاسة.
+4. التزم حرفياً بأدوات عصر المؤلف ({date}).
+5. صمم رسمتين أو ثلاث رسمات توضيحية باستخدام علامات [[FIG_1]] و [[FIG_2]] متبوعة ببلوك كود بايثون ` ```python ... ``` ` لرسم الشكل وحفظه بـ `plt.savefig('fig.png')`.
+6. عنوان قسم البرهان يجب أن يكون: `### البرهان` (فقط كلمة البرهان دون أي جملة طويلة بعدها).
 
-**قسّم الشرح وفق هذه المحاور بالتسلسل:**
-1. **هوية العمل وسياقه التاريخي:** (عنوان العمل مترجماً للعربية والإنجليزية، والمشكلة الفيزيائية أو الفلكية التي كانت تؤرق العلماء قبل {date} وكيف حلها المؤلف).
-2. **صوت المؤلف:** (اقتبس بالترجمة العربية المباشرة جملة أو فقرة واحدة من النص الأصلي للمؤلف مع ذكر الكتاب والفصل أو الصفحة لربط القارئ بالوثيقة الأصلية).
-3. **الفروض والأسس التي انطلق منها المؤلف:** (شرح الفرضيات الفيزيائية والهندسية الأساسية بلغة واضحة، مع وضع الرسمة التوضيحية الأولى `[[FIG_1]]` في سياقها).
-4. **البرهان خطوة بخطوة بأدوات عصر المؤلف:** (تتبع البرهان الكامل بتسلسل منطقي؛ اشرح كل خطوة هندسية كأنك ترسمها أمام القارئ، عرّف كل رمز في مكانه، وضع الرسمة التوضيحية الثانية `[[FIG_2]]` وسط خطوات البرهان لتوضيح المثلثات أو الدوائر أو المسارات).
-5. **التطبيق العملي والأرقام:** (تطبيق المعادلات على حالة فيزيائية ملموسة بالأرقام كما فعل المؤلف، مع رسمة ثالثة `[[FIG_3]]` إن لزم الأمر).
-6. **العدسة الحديثة:** (في 3 إلى 5 أسطر فقط: كيف تُعبّر عن النتيجة الجوهرية ذاتها اليوم بأدوات حساب المتجهات أو التفاضل والتكامل لإبراز الفارق الزمني).
-7. **الثغرة التي لم يرها المؤلف:** (نقطة ضعف واحدة أو افتراض محدد في هذه الورقة أثبت العلم لاحقاً خطأه أو محدوديته، مع ذكر من كشفه).
-8. **السؤال المعلَّق:** (سؤال واحد مفتوح في الختام يبرز التناقض أو الثغرة التي ستحلها الورقة التالية في السلسلة: {bridge}).
+**قسّم الشرح وفق هذه العناوين الثمانية بالتسلسل:**
+1. `### هوية العمل وسياقه التاريخي` (اكتب في أول سطرين عنوان العمل بالعربية والإنجليزية، ثم المشكلة التاريخية وحلها).
+2. `### صوت المؤلف` (اقتباس مترجم ومحدد من النص الأصلي).
+3. `### الفروض والأسس التي انطلق منها المؤلف` (مع الرسمة الأولى [[FIG_1]]).
+4. `### البرهان` (البرهان المفصل خطوة بخطوة مع الرسمة الثانية [[FIG_2]]).
+5. `### التطبيق العملي والأرقام` (حسابات تطبيقية مع رسمة ثالثة [[FIG_3]] إن لزم).
+6. `### العدسة الحديثة` (3 إلى 5 أسطر فقط لصياغة النتيجة بأدوات العصر الحالي).
+7. `### الثغرة التي لم يرها المؤلف` (نقطة الضعف التاريخية ومن كشفها).
+8. `### السؤال المعلَّق` (سؤال ختامي يربط بالورقة القادمة: {bridge}).
 
 **قواعد المعادلات:**
-- ابدأ مباشرة بالمحور الأول دون مقدمات.
-- ضع كل معادلة سطرية بين `$ ... $` وكل معادلة مستقلة بين `$$ ... $$` مع ترك سطر فارغ قبلها وبعدها.
-- لا تضع أي كلمة عربية داخل علامات `$ ... $` أو `$$ ... $$` إطلاقاً.
+- ضع كل معادلة سطرية بين `$ ... $` وكل معادلة مستقلة بين `$$ ... $$` مع سطر فارغ قبلها وبعدها.
+- لا تضع أي كلمة عربية داخل علامات `$ ... $` إطلاقاً.
 """
 
     raw_response = call_gemini(prompt)
@@ -252,16 +263,21 @@ def main():
     # استخراج وتنفيذ جميع الرسومات التوضيحية في سياقها
     raw_lecture_body, generated_figs = process_multiple_diagrams(raw_response, base_name)
 
+    # توحيد عنوان البرهان ليكون '### البرهان' في النص الخام أيضاً
+    raw_lecture_body = re.sub(r'###\s*البرهان خطوة بخطوة بأدوات عصر المؤلف', r'### البرهان', raw_lecture_body)
+
     # توليد ملف الـ HTML التفاعلي
     interactive_html = generate_interactive_html(paper_id, date, scientist, title, raw_lecture_body)
     has_html = False
-    if interactive_html:
+    if interactive_html and len(interactive_html) > 200:
         with open(html_path, "w", encoding="utf-8") as f:
             f.write(interactive_html)
         has_html = True
         print(f"Generated Interactive HTML: {html_path}")
+    else:
+        print("WARNING Interactive HTML was not generated.")
 
-    # تجهيز النص لـ XeLaTeX أولاً ثم حقن كود الصور النظيف في أماكن [[FIG_X]]
+    # تجهيز النص لـ XeLaTeX أولاً ثم حقن كود الصور في أماكن [[FIG_X]]
     clean_latex_body = sanitize_markdown_for_xelatex(raw_lecture_body)
 
     for fig_id, img_path in generated_figs.items():
@@ -275,23 +291,27 @@ def main():
         )
         clean_latex_body = clean_latex_body.replace(f"[[{fig_id}]]", latex_fig)
 
-    # إزالة أي علامة [[FIG_X]] فشل رسمها حتى لا تظهر في النص
     clean_latex_body = re.sub(r'\[\[FIG_\d+\]\]', '', clean_latex_body)
 
+    # معالجة عنوان الغلاف بطريقة سليمة تمنع تشويه اللغات المختلطة في XeLaTeX
     safe_title = title.replace("&", "\\&").replace("%", "\\%").replace("_", "\\_")
     safe_scientist = scientist.replace("&", "\\&").replace("%", "\\%").replace("_", "\\_")
     safe_venue = venue.replace("&", "\\&").replace("%", "\\%").replace("_", "\\_")
     safe_puzzle = puzzle.replace("&", "\\&").replace("%", "\\%").replace("_", "\\_")
     safe_bridge = bridge.replace("&", "\\&").replace("%", "\\%").replace("_", "\\_")
 
-    full_markdown_for_pdf = f"""---
+    header_block = f"""---
 id: "{paper_id}"
 date: "{date}"
 scientist: "{scientist}"
 title: "{title}"
 ---
 
-# \\textenglish{{{safe_title}}}
+\\begin{{center}}
+\\Large\\textbf{{{safe_title}}}
+\\end{{center}}
+
+\\vspace{{0.5em}}
 
 * **المؤلف:** \\textenglish{{{safe_scientist}}} | **التاريخ:** {date}
 * **جهة النشر:** \\textenglish{{{safe_venue}}}
@@ -304,7 +324,7 @@ title: "{title}"
 {clean_latex_body}
 """
     with open(md_path, "w", encoding="utf-8") as f:
-        f.write(full_markdown_for_pdf)
+        f.write(header_block)
 
     pandoc_cmd = [
         "pandoc", md_path,
@@ -329,7 +349,7 @@ title: "{title}"
 
     print(f"Compiled Vector PDF: {pdf_path}")
 
-    # حفظ نسخة Obsidian النظيفة بالصور في مواضعها
+    # حفظ نسخة Obsidian
     obsidian_body = raw_lecture_body
     for fig_id, img_path in generated_figs.items():
         fig_num = fig_id.split("_")[1]
@@ -360,24 +380,48 @@ link: "{link}"
     with open(md_path, "w", encoding="utf-8") as f:
         f.write(obsidian_md)
 
+    # استخراج مقدمة مبسطة ومفيدة من المحتوى لإدراجها في نص الإيميل
+    intro_match = re.search(r'###\s*هوية العمل وسياقه التاريخي\s*\n\n(.*?)(?=\n\n###|\Z)', raw_lecture_body, re.DOTALL)
+    if intro_match:
+        intro_raw = intro_match.group(1).strip()
+        intro_sentences = [s.strip() for s in re.split(r'[\.\n]', intro_raw) if len(s.strip()) > 15]
+        email_intro = "\n\n".join(intro_sentences[:2])
+    else:
+        email_intro = puzzle
+
     msg = EmailMessage()
-    msg["Subject"] = f"[{paper_id} | {date}] {scientist.split('(')[0].strip()}: محاضرة تأسيسية + محاكاة تفاعلية"
+    msg["Subject"] = f"[{paper_id} | {date}] {scientist.split('(')[0].strip()}: محاضرة تأسيسية ومحاكاة"
     msg["From"] = f"Physics Archive <{GMAIL_USER}>"
     msg["To"] = SUBSCRIBERS[0]
     if len(SUBSCRIBERS) > 1:
         msg["Bcc"] = ", ".join(SUBSCRIBERS[1:])
 
-    msg.set_content(
-        f"[{paper_id}] {scientist.split('(')[0].strip()} -- {date}\n\n"
-        f"{title}\n\n"
-        f"ملخص الإسهام: {puzzle}\n\n"
-        f"الأثر التاريخي والرابط السببي: {bridge}\n\n"
-        f"المصدر الأصلي: {link}\n\n"
-        f"المرفقات:\n"
-        f"1. نسخة PDF مطبوعة بمحرك XeLaTeX مع الرسومات التوضيحية السياقية.\n"
-        f"2. نسخة Markdown لـ Obsidian.\n"
-        f"3. ملف HTML تفاعلي متقدم بالأنيميشن وتحكم البارامترات."
-    )
+    html_status_text = "3. ملف HTML تفاعلي (محاكاة الحركة والبارامترات)." if has_html else ""
+
+    email_body = f"""[{paper_id}] {scientist.split('(')[0].strip()} -- {date}
+
+العمل: {title}
+
+نظرة عامة ومقدمة المحاضرة:
+----------------------------------------
+{email_intro}
+
+الإسهام الفيزيائي:
+{puzzle}
+
+الأثر التاريخي:
+{bridge}
+
+المصدر الأرشيفي:
+{link}
+
+----------------------------------------
+المرفقات:
+1. نسخة PDF مطبوعة ومجهزة بالرسومات الهندسية.
+2. نسخة Markdown كاملة لـ Obsidian.
+{html_status_text}
+"""
+    msg.set_content(email_body.strip())
 
     with open(pdf_path, "rb") as f:
         msg.add_attachment(f.read(), maintype="application", subtype="pdf", filename=f"{base_name}.pdf")
